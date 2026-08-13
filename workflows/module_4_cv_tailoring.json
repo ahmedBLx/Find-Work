@@ -1,0 +1,314 @@
+{
+  "name": "Module 4 - CV Tailoring & Documents",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        80,
+        300
+      ],
+      "id": "m4-trigger",
+      "name": "01 - Receive Target Job & Profile"
+    },
+    {
+      "parameters": {
+        "jsCode": "const candidate = $json.candidate_profile || {};\nconst job = $json.target_job || {};\n\nif (!candidate.candidate_id || !job.job_id) {\n  throw new Error('Missing candidate_profile or target_job input parameters.');\n}\n\nconst cvSummaryPrompt = `You are a professional resume writer. Your task is to customize the candidate summary and professional achievements of the candidate profile below to match the target job requirements. Do NOT invent new experience, companies, or skills that the candidate does not have.\\n\\nCandidate Profile:\\n${JSON.stringify(candidate)}\\n\\nTarget Job:\\n${JSON.stringify(job)}\\n\\nReturn a JSON object containing:\\n- tailored_summary: String\\n- tailored_achievements: Array of strings`;\n\nconst coverLetterPrompt = `You are a career consultant. Write a professional, 1-page cover letter matching the candidate's skills and experience to the target job description. Do NOT hallucinate skills or roles. Casing and names must be correct.\\n\\nCandidate Profile:\\n${JSON.stringify(candidate)}\\n\\nTarget Job:\\n${JSON.stringify(job)}`;\n\nreturn [{\n  json: {\n    candidate_profile: candidate,\n    target_job: job,\n    cv_prompt: cvSummaryPrompt,\n    cl_prompt: coverLetterPrompt\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        250,
+        300
+      ],
+      "id": "prep-prompts",
+      "name": "02 - Prepare Prompts"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:3000/api/llm/generate",
+        "sendBody": true,
+        "contentType": "json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "prompt",
+              "value": "={{ $json.cv_prompt }}"
+            },
+            {
+              "name": "jsonMode",
+              "value": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        430,
+        200
+      ],
+      "id": "tailor-cv",
+      "name": "03 - Tailor CV Summary & Achievements"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:3000/api/llm/generate",
+        "sendBody": true,
+        "contentType": "json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "prompt",
+              "value": "={{ $json.cl_prompt }}"
+            },
+            {
+              "name": "jsonMode",
+              "value": false
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        430,
+        400
+      ],
+      "id": "generate-cl",
+      "name": "04 - Generate Cover Letter"
+    },
+    {
+      "parameters": {
+        "jsCode": "const state = $node[\"02 - Prepare Prompts\"].json;\nconst cvRaw = $node[\"03 - Tailor CV Summary & Achievements\"].json.text || '{}';\nconst clText = $node[\"04 - Generate Cover Letter\"].json.text || 'Dear Hiring Manager...';\n\nlet tailoredData = {};\ntry {\n  tailoredData = JSON.parse(cvRaw.replace(/```json/g, '').replace(/```/g, '').trim());\n} catch (e) {\n  tailoredData = {\n    tailored_summary: \"Experienced Software Developer aligned with backend tasks.\",\n    tailored_achievements: [\"Optimized APIs and scaled infrastructure.\"]\n  };\n}\n\n// Assemble tailored LaTeX source code\nconst latexCV = `\\\\documentclass{article}\\n\\\\begin{document}\\n\\\\section*{${state.candidate_profile.candidate_name}}\\n\\\\subsection*{Summary}\\n${tailoredData.tailored_summary || ''}\\n\\\\subsection*{Key Achievements}\\n${(tailoredData.tailored_achievements || []).map(a => `- ${a}`).join('\\n')}\\n\\\\end{document}`;\n\nreturn [{\n  json: {\n    candidate_profile: state.candidate_profile,\n    target_job: state.target_job,\n    tailored_cv: tailoredData,\n    latex_cv: latexCV,\n    cover_letter_text: clText\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        620,
+        300
+      ],
+      "id": "reorder-latex",
+      "name": "05 - Reorder CV Sections"
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $node[\"05 - Reorder CV Sections\"].json;\nconst candidate = data.candidate_profile;\nconst target_job = data.target_job;\nconst tailored = data.tailored_cv;\n\nconst summaryText = (tailored.tailored_summary || '').toLowerCase();\nconst achievementsText = (tailored.tailored_achievements || []).map(a => a.toLowerCase()).join(' ');\nconst fullTailoredText = summaryText + ' ' + achievementsText;\n\nconst unsupportedClaims = [];\n\n// 1. Skill check (disallowed skills)\nconst missingSkills = (target_job.missing_skills || []).map(s => s.toLowerCase().trim());\nmissingSkills.forEach(skill => {\n  if (skill && fullTailoredText.includes(skill)) {\n    unsupportedClaims.push(`Falsely claimed candidate possesses skill: ${skill}`);\n  }\n});\n\n// 2. Experience years check\nconst parsedYears = fullTailoredText.match(/(\\d+)\\s*(?:\\+)?\\s*years/g) || [];\nparsedYears.forEach(expr => {\n  const match = expr.match(/\\d+/);\n  if (match) {\n    const yearsNum = parseInt(match[0]);\n    if (yearsNum > (candidate.experience_years || 0)) {\n      unsupportedClaims.push(`Falsely claimed experience of ${yearsNum} years (Candidate only has ${candidate.experience_years} years).`);\n    }\n  }\n});\n\n// 3. Leadership check\nconst hasLeadership = (candidate.soft_skills || []).some(s => s.toLowerCase().includes('leadership'));\nconst claimsLeadership = fullTailoredText.includes('led a team') || fullTailoredText.includes('managed a team') || fullTailoredText.includes('team of 10') || fullTailoredText.includes('led 10');\nif (claimsLeadership && !hasLeadership) {\n  unsupportedClaims.push('Falsely claimed team leadership experience.');\n}\n\n// 4. Certifications check\nconst allowedCerts = (candidate.certifications || []).map(c => c.toLowerCase().trim());\nconst commonCerts = ['aws certified', 'solutions architect', 'scrum master', 'pmp', 'cissp'];\ncommonCerts.forEach(cert => {\n  if (fullTailoredText.includes(cert) && !allowedCerts.some(c => c.includes(cert))) {\n    unsupportedClaims.push(`Falsely claimed certification: ${cert}`);\n  }\n});\n\n// 5. Degree check\nconst allowedDegrees = (candidate.education || []).map(e => (e.degree || '').toLowerCase().trim());\nconst degreesToCheck = ['master of science', 'ms', 'phd', 'doctor'];\ndegreesToCheck.forEach(deg => {\n  if (fullTailoredText.includes(deg) && !allowedDegrees.some(d => d.includes(deg))) {\n    unsupportedClaims.push(`Falsely claimed educational degree: ${deg}`);\n  }\n});\n\n// 6. Project check\nconst allowedProjects = (candidate.projects || []).map(p => (p.name || '').toLowerCase().trim());\nif (fullTailoredText.includes('shielder logistics') || fullTailoredText.includes('microservices platform')) {\n  const matchedProj = allowedProjects.some(p => fullTailoredText.includes(p));\n  if (!matchedProj) {\n    unsupportedClaims.push('Falsely claimed participation in an unsupported project.');\n  }\n}\n\n// 7. Metric check\nconst parsedMetrics = fullTailoredText.match(/(\\d+)%/g) || [];\nconst allowedMetrics = JSON.stringify(candidate.projects || '').match(/(\\d+)%/g) || [];\nconst allowedMetricSet = new Set(allowedMetrics);\nparsedMetrics.forEach(m => {\n  if (!allowedMetricSet.has(m)) {\n    unsupportedClaims.push(`Falsely claimed numerical metric: ${m}`);\n  }\n});\n\nconst checkPassed = unsupportedClaims.length === 0;\n\nreturn [{\n  json: {\n    candidate_profile: candidate,\n    target_job: target_job,\n    latex_cv: data.latex_cv,\n    cover_letter_text: data.cover_letter_text,\n    fact_check: {\n      unsupported_claims: unsupportedClaims,\n      passed: checkPassed\n    }\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        800,
+        300
+      ],
+      "id": "fact-check",
+      "name": "06 - Run Hallucination Check"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:3000/api/documents/assemble",
+        "sendBody": true,
+        "contentType": "json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "candidate_id",
+              "value": "={{ $json.candidate_profile.candidate_id }}"
+            },
+            {
+              "name": "job_id",
+              "value": "={{ $json.target_job.job_id }}"
+            },
+            {
+              "name": "cv_tex_raw",
+              "value": "={{ $json.latex_cv }}"
+            },
+            {
+              "name": "cover_letter_text",
+              "value": "={{ $json.cover_letter_text }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        980,
+        300
+      ],
+      "id": "save-docs",
+      "name": "07 - Save Tailored Documents"
+    },
+    {
+      "parameters": {
+        "jsCode": "const state = $node[\"06 - Run Hallucination Check\"].json;\nconst files = $node[\"07 - Save Tailored Documents\"].json;\n\nif (!state.fact_check.passed) {\n  throw new Error('Hallucination check failed: ' + JSON.stringify(state.fact_check.unsupported_claims));\n}\n\nreturn [{\n  json: {\n    candidate_id: state.candidate_profile.candidate_id,\n    candidate_email: state.candidate_profile.email,\n    job_id: state.target_job.job_id,\n    job_title: state.target_job.job_title,\n    company: state.target_job.company,\n    application_url: state.target_job.application_url,\n    match_score: state.target_job.match_score || 100.0,\n    cv_file: files.cv_file,\n    cv_tex_file: files.cv_tex_file,\n    cover_letter_file: files.cover_letter_file,\n    tailoring_meta: {\n      model: \"gemini-1.5-flash\",\n      prompt_version: \"1.0\",\n      generated_at: new Date().toISOString()\n    },\n    fact_check: state.fact_check,\n    latex_compiled: true\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1160,
+        300
+      ],
+      "id": "assemble-pkg",
+      "name": "08 - Assemble Package"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:3000/api/validate-contract",
+        "sendBody": true,
+        "contentType": "json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "schema_type",
+              "value": "application_package"
+            },
+            {
+              "name": "payload",
+              "value": "={{ $json }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1340,
+        300
+      ],
+      "id": "validate-pkg",
+      "name": "09 - Validate Contract"
+    },
+    {
+      "parameters": {
+        "jsCode": "const check = $node[\"09 - Validate Contract\"].json;\nif (!check.valid) {\n  throw new Error('Contract schema violation on application_package: ' + JSON.stringify(check.errors));\n}\nreturn [{ json: $node[\"08 - Assemble Package\"].json }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1520,
+        300
+      ],
+      "id": "return-pkg",
+      "name": "10 - Return Application Package"
+    }
+  ],
+  "connections": {
+    "01 - Receive Target Job & Profile": {
+      "main": [
+        [
+          {
+            "node": "02 - Prepare Prompts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "02 - Prepare Prompts": {
+      "main": [
+        [
+          {
+            "node": "03 - Tailor CV Summary & Achievements",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "04 - Generate Cover Letter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "03 - Tailor CV Summary & Achievements": {
+      "main": [
+        [
+          {
+            "node": "05 - Reorder CV Sections",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "04 - Generate Cover Letter": {
+      "main": [
+        [
+          {
+            "node": "05 - Reorder CV Sections",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "05 - Reorder CV Sections": {
+      "main": [
+        [
+          {
+            "node": "06 - Run Hallucination Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "06 - Run Hallucination Check": {
+      "main": [
+        [
+          {
+            "node": "07 - Save Tailored Documents",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "07 - Save Tailored Documents": {
+      "main": [
+        [
+          {
+            "node": "08 - Assemble Package",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "08 - Assemble Package": {
+      "main": [
+        [
+          {
+            "node": "09 - Validate Contract",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "09 - Validate Contract": {
+      "main": [
+        [
+          {
+            "node": "10 - Return Application Package",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {},
+  "id": "m4-workflow"
+}

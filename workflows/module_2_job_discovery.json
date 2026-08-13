@@ -1,0 +1,364 @@
+{
+  "name": "Module 2 - Job Discovery",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        80,
+        300
+      ],
+      "id": "m2-trigger",
+      "name": "01 - Receive Search Criteria"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{\n  json: {\n    query: $json.query || 'Backend Engineer',\n    location: $json.location || 'New York, NY',\n    page: $json.page || 1\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        250,
+        150
+      ],
+      "id": "prep-src-a",
+      "name": "02 - Prepare Source A Request"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "http://localhost:3000/api/mock/source-a",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "query",
+              "value": "={{ $json.query }}"
+            },
+            {
+              "name": "location",
+              "value": "={{ $json.location }}"
+            }
+          ]
+        },
+        "options": {
+          "errorHandling": "ignore"
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        430,
+        150
+      ],
+      "id": "query-src-a",
+      "name": "03 - Query Source A"
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $node[\"03 - Query Source A\"].json;\nconst isError = !response || response.success === false || response.error;\nreturn [{\n  json: {\n    success: !isError,\n    jobs: isError ? [] : (Array.isArray(response) ? response : [response])\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        610,
+        150
+      ],
+      "id": "handle-src-a",
+      "name": "04 - Handle Source A Response"
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $node[\"04 - Handle Source A Response\"].json;\nconst normalized = data.jobs.map(job => ({\n  schema_version: \"1.0\",\n  job_id: \"src_a_\" + (job.id || Math.random().toString(36).substr(2, 5)),\n  job_title: job.title || \"Unknown Position\",\n  company: job.company || \"Unknown Company\",\n  location: job.loc || \"Unknown\",\n  source: \"Source A (GlobalJobs API)\",\n  description: job.desc || \"No description provided.\",\n  application_url: job.url || \"https://example.com/apply\",\n  required_skills: job.skills_required ? job.skills_required.split(',').map(s=>s.trim()) : [],\n  retrieved_at: new Date().toISOString(),\n  employment_type: \"Full-time\",\n  seniority_level: job.experience_req_years >= 5 ? \"Senior\" : (job.experience_req_years >= 3 ? \"Mid-Senior\" : \"Junior\"),\n  salary: null,\n  education_requirement: job.desc && job.desc.includes(\"BS\") ? \"Bachelor's Degree\" : null,\n  required_experience_years: job.experience_req_years || 0,\n  preferred_skills: [],\n  technologies: job.skills_required ? job.skills_required.split(',').map(s=>s.trim()) : []\n}));\nreturn [{ json: { normalized } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        790,
+        150
+      ],
+      "id": "norm-src-a",
+      "name": "05 - Normalize Source A Jobs"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{\n  json: {\n    q: $json.query || 'Backend Engineer',\n    loc: $json.location || 'New York, NY',\n    page: $json.page || 1\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        250,
+        450
+      ],
+      "id": "prep-src-b",
+      "name": "06 - Prepare Source B Request"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "http://localhost:3000/api/mock/source-b",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{ $json.q }}"
+            },
+            {
+              "name": "loc",
+              "value": "={{ $json.loc }}"
+            }
+          ]
+        },
+        "options": {
+          "errorHandling": "ignore"
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        430,
+        450
+      ],
+      "id": "query-src-b",
+      "name": "07 - Query Source B"
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $node[\"07 - Query Source B\"].json;\nconst isError = !response || response.success === false || response.error;\nreturn [{\n  json: {\n    success: !isError,\n    jobs: isError ? [] : (Array.isArray(response) ? response : [response])\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        610,
+        450
+      ],
+      "id": "handle-src-b",
+      "name": "08 - Handle Source B Response"
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $node[\"08 - Handle Source B Response\"].json;\nconst normalized = data.jobs.map(job => ({\n  schema_version: \"1.0\",\n  job_id: \"src_b_\" + (job.id || Math.random().toString(36).substr(2, 5)),\n  job_title: job.jobTitle || \"Unknown Position\",\n  company: job.companyName || \"Unknown Company\",\n  location: job.locationInfo || \"Unknown\",\n  source: \"Source B (TechCareers API)\",\n  description: job.jobDescription || \"No description provided.\",\n  application_url: job.jobUrl || \"https://example.com/apply\",\n  required_skills: Array.isArray(job.skills) ? job.skills : [],\n  retrieved_at: job.retrieved || new Date().toISOString(),\n  employment_type: \"Full-time\",\n  seniority_level: job.experienceYears >= 5 ? \"Senior\" : (job.experienceYears >= 3 ? \"Mid-Senior\" : \"Junior\"),\n  salary: null,\n  education_requirement: null,\n  required_experience_years: job.experienceYears || 0,\n  preferred_skills: [],\n  technologies: Array.isArray(job.skills) ? job.skills : []\n}));\nreturn [{ json: { normalized } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        790,
+        450
+      ],
+      "id": "norm-src-b",
+      "name": "09 - Normalize Source B Jobs"
+    },
+    {
+      "parameters": {
+        "jsCode": "const normA = $node[\"05 - Normalize Source A Jobs\"].json.normalized || [];\nconst normB = $node[\"09 - Normalize Source B Jobs\"].json.normalized || [];\nreturn [{\n  json: {\n    jobs: normA.concat(normB)\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        970,
+        300
+      ],
+      "id": "combine-results",
+      "name": "10 - Combine Results"
+    },
+    {
+      "parameters": {
+        "jsCode": "const combined = $node[\"10 - Combine Results\"].json.jobs;\nconst uniqueJobs = [];\nconst seenSourceJobIds = new Set();\nconst seenUrls = new Set();\nconst seenFallbacks = new Set();\n\ncombined.forEach(job => {\n  // 1. source + sourceJobId check\n  const sourceJobKey = `${job.source}|${job.job_id}`;\n  \n  // 2. normalized URL check\n  let urlKey = (job.application_url || '').toLowerCase().trim();\n  urlKey = urlKey.replace(/^https?:\\/\\//, '').replace(/\/+$/, '');\n  \n  // 3. Fallback: company + title + location check\n  const company = (job.company || '').toLowerCase().trim();\n  const title = (job.job_title || '').toLowerCase().trim();\n  const location = (job.location || '').toLowerCase().trim();\n  const fallbackKey = `${company}|${title}|${location}`;\n  \n  if (seenSourceJobIds.has(sourceJobKey)) {\n    return;\n  }\n  if (urlKey && seenUrls.has(urlKey)) {\n    return;\n  }\n  if (seenFallbacks.has(fallbackKey)) {\n    return;\n  }\n  \n  seenSourceJobIds.add(sourceJobKey);\n  if (urlKey) seenUrls.add(urlKey);\n  seenFallbacks.add(fallbackKey);\n  uniqueJobs.push(job);\n});\n\nreturn [{ json: { jobs: uniqueJobs } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1150,
+        300
+      ],
+      "id": "dedupe-jobs",
+      "name": "11 - Deduplicate Jobs"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:3000/api/validate-contract",
+        "sendBody": true,
+        "contentType": "json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "schema_type",
+              "value": "jobs"
+            },
+            {
+              "name": "payload",
+              "value": "={{ $json.jobs }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1330,
+        300
+      ],
+      "id": "validate-contract",
+      "name": "12 - Validate jobs.json Contract"
+    },
+    {
+      "parameters": {
+        "jsCode": "const check = $node[\"12 - Validate jobs.json Contract\"].json;\nif (!check.valid) {\n  throw new Error('Contract schema violation on jobs list: ' + JSON.stringify(check.errors));\n}\nreturn [{ json: { jobs: $node[\"11 - Deduplicate Jobs\"].json.jobs } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1510,
+        300
+      ],
+      "id": "return-jobs",
+      "name": "13 - Return Final Jobs"
+    }
+  ],
+  "connections": {
+    "01 - Receive Search Criteria": {
+      "main": [
+        [
+          {
+            "node": "02 - Prepare Source A Request",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "06 - Prepare Source B Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "02 - Prepare Source A Request": {
+      "main": [
+        [
+          {
+            "node": "03 - Query Source A",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "03 - Query Source A": {
+      "main": [
+        [
+          {
+            "node": "04 - Handle Source A Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "04 - Handle Source A Response": {
+      "main": [
+        [
+          {
+            "node": "05 - Normalize Source A Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "05 - Normalize Source A Jobs": {
+      "main": [
+        [
+          {
+            "node": "10 - Combine Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "06 - Prepare Source B Request": {
+      "main": [
+        [
+          {
+            "node": "07 - Query Source B",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "07 - Query Source B": {
+      "main": [
+        [
+          {
+            "node": "08 - Handle Source B Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "08 - Handle Source B Response": {
+      "main": [
+        [
+          {
+            "node": "09 - Normalize Source B Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "09 - Normalize Source B Jobs": {
+      "main": [
+        [
+          {
+            "node": "10 - Combine Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "10 - Combine Results": {
+      "main": [
+        [
+          {
+            "node": "11 - Deduplicate Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "11 - Deduplicate Jobs": {
+      "main": [
+        [
+          {
+            "node": "12 - Validate jobs.json Contract",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "12 - Validate jobs.json Contract": {
+      "main": [
+        [
+          {
+            "node": "13 - Return Final Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {},
+  "id": "m2-workflow"
+}

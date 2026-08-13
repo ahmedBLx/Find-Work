@@ -1,0 +1,21 @@
+Bobby Green
+bobby.green@example.com
++1-555-0300
+Austin, TX
+
+SUMMARY
+Enthusiastic Junior Developer and recent graduate seeking an entry-level position as a Software Engineer. Proficient in HTML, CSS, JavaScript, and Node.js. Eager to learn and contribute to team deliverables.
+
+EXPERIENCE
+Junior Web Developer Internship | WebCraft Agency | Jun 2023 - Dec 2023
+- Built responsive static landing pages using HTML5, CSS3, and JavaScript.
+- Assisted in writing simple REST endpoints using Node.js and Express.
+- Collaborated on Git repositories and participated in daily standups.
+
+TECHNICAL SKILLS
+- Programming Languages: JavaScript, HTML, CSS
+- Frameworks: Express, Bootstrap
+- Tools: Git, VS Code
+
+EDUCATION
+Associate Degree in Web Development | Community College | Graduated 2023

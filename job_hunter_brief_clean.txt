@@ -1,0 +1,625 @@
+﻿
+
+Job Hunter Agent – AIE314 Summer26
+1. The project in one page
+You will build a system that takes a candidate's CV, finds real vacancies, decides which are worth applying to, rewrites the CV and cover letter for the chosen vacancy, asks a human to approve, submits the application and tracks the result.
+The system is delivered as five independent n8n workflows, not one. Each student owns one workflow completely — its design, code, tests, evaluation, documentation and defence — and the five are connected only at the end, through data contracts agreed in advance (Section 3).
+Three rules that shape everything
+Nobody waits for anybody. Every module has a sample input file provided with this brief, so all five students start on day one and every module must run, be tested and be demonstrated alone.
+Every choice is justified. Model, API, algorithm, database, threshold, weight — each chosen against declared criteria and recorded. A good choice with no reasoning scores lower than a defensible one with clear reasoning.
+Every claim is measured. "It works well" is not a result. A number, its method and its limitation are.
+How you will be examined: In the final discussion you open your own workflow and explain any node in it. A module that runs but that its owner cannot explain is not credited to that student.
+Who does what
+Module — role
+Owns
+Does not touch
+1 — CV & AI Engineer
+CV intake, parsing, LLM extraction, schema validation
+Job search, matching, documents
+2 — Job Retrieval Engineer
+Sources, APIs, normalisation, de-duplication, filtering
+CV parsing, scoring, ranking
+3 — Matching Engineer
+Scoring, semantic similarity, ranking, thresholds, explainability
+Fetching jobs, reading CVs, documents
+4 — Document Engineer
+CV tailoring, hallucination control, LaTeX/PDF, cover letters
+Scoring jobs, submitting applications
+5 — Operations Engineer
+Approval, submission, tracking, notification, retries
+Generating documents, ranking jobs
+
+
+2. System architecture
+
+Module
+Reads
+Produces
+Real dependency
+1
+CV file
+candidate_profile.json
+none
+2
+search_config.json
+jobs.json
+none
+3
+candidate_profile.json + jobs.json
+ranked_jobs.json
+M1, M2 — at integration only
+4
+original CV + one ranked job
+application_package.json
+M3 — at integration only
+5
+application_package.json
+application_status.json
+M4 — at integration only
+Until Milestone 5, every arrow in the diagram is a static sample file from the starter kit. That is what makes parallel work possible and what makes each module independently gradeable.
+Why it is built this way
+Decision
+Reason
+Five modules, not one workflow
+Each boundary is also a change boundary: swapping the job source touches only Module 2, changing the LLM touches only Modules 1 and 4. It also makes individual assessment possible.
+Contracts agreed before code
+Five people building in parallel can only integrate if the data between them is fixed in advance. Contract drift is the main cause of failed integration.
+Mock inputs from day one
+Removes the dependency chain that normally leaves four students waiting for one, then everything written in the last week.
+n8n as the platform
+Control flow, retries, error paths and external calls are visible as nodes, so design decisions can be inspected and discussed — which is what this project assesses.
+Human approval before submission
+The system acts in a real labour market on a real person's behalf. Automatic submission of AI-generated documents is an ethical risk and often breaches platform terms.
+3. Interface contracts
+These are the only things the five modules know about each other. They are frozen at Milestone 1 and change only through the procedure in 3.6.
+Rules
+Field names are lower_snake_case and fixed. Do not rename, abbreviate or translate them.
+Timestamps are ISO-8601 UTC. Identifiers (candidate_id, job_id) stay unchanged through the whole pipeline.
+Arrays are arrays, never comma-separated strings. Missing values are explicit nulls, never empty strings.
+Every payload carries schema_version. Change the shape, bump the version.
+A consuming module validates its input and fails loudly. Never guess a missing field.
+3.1 candidate_profile.json — Module 1 → Module 3
+Required fields
+Optional fields
+schema_version, candidate_id, candidate_name, email (string)
+experience_years (number)
+job_titles, preferred_roles, technical_skills, programming_languages, frameworks, tools, keywords (array<string>)
+education (array of {degree, field, institution, year})
+extraction_meta ({model, prompt_version, extracted_at, confidence})
+phone, location (string)
+soft_skills, certifications (array<string>)
+projects (array of {name, description, technologies})
+keywords is what Module 2 searches with, so it must contain market-facing terms ("Backend Engineer") and not only raw skills.
+3.2 jobs.json — Module 2 → Module 3
+An array of job objects.
+Required fields
+Optional fields
+schema_version, job_id, job_title, company, location, source (string)
+description (string, cleaned plain text)
+application_url (string, valid absolute URL)
+required_skills (array<string>)
+retrieved_at (ISO-8601)
+employment_type, seniority_level, salary, education_requirement (string)
+required_experience_years (number)
+preferred_skills, technologies (array<string>)
+3.3 ranked_jobs.json — Module 3 → Module 4
+An array sorted by match_score descending, carrying job_id, job_title, company and application_url through unchanged, plus:
+Field
+Type
+Meaning
+match_score
+number
+0–100, one decimal
+score_breakdown
+object
+Each component's value and the weight applied to it
+matched_skills / missing_skills
+array<string>
+Required skills the candidate has / lacks
+experience_match
+object
+{candidate_years, required_years, satisfied}
+semantic_similarity
+number
+0–1
+decision
+string
+APPLY / REVIEW / REJECT
+explanation
+string
+Readable justification a human can check
+method, ranked_at
+string
+Which scorer produced this, and when
+3.4 application_package.json — Module 4 → Module 5
+Field
+Type
+Meaning
+candidate_id, candidate_email, job_id, job_title, company, application_url
+string
+Carried through unchanged
+match_score
+number
+Carried through from Module 3
+cv_file, cv_tex_file, cover_letter_file
+string
+Paths or URLs of the generated documents
+tailoring_meta
+object
+{model, prompt_version, generated_at}
+fact_check
+object
+{unsupported_claims: [], passed: bool}
+latex_compiled
+boolean
+Whether the .tex compiled
+Hard constraint: If fact_check.passed is false the package is not emitted. Module 4 regenerates or fails the item explicitly — it never passes an unverified document downstream.
+3.5 application_status.json — Module 5 output
+Field
+Type
+Meaning
+application_id
+string
+Generated by Module 5
+candidate_id, job_id, company, job_title
+string
+Carried through
+approval_decision
+string
+APPROVED / REJECTED / REVIEW
+application_status
+string
+submitted / failed / skipped_duplicate / pending_approval
+submission_method
+string
+api / email / mock / manual
+submitted_at, attempts, confirmation_sent
+mixed
+When, how many tries, whether the candidate was notified
+error
+object
+{code, message, stage} when the status is failed
+
+3.6 Changing a contract
+Contracts will need to change; that is normal. Changing one silently is not. The requester raises a written change request; the producing owner and every consuming owner sign it; the Integration Lead updates the contract, bumps schema_version and records it in the change log; the sample files are updated in the same step.
+Warning: Field renames discovered at integration — job_title quietly becoming position — are deducted from Data Consistency on both sides, producer and consumer.
+4. Module briefs
+One page per student. Each page tells you exactly what to build, what you must be able to defend, how to test it alone, how you will be measured, what to hand in, and when it counts as finished.
+Module 1 — CV Intelligence · Student 1, CV & AI Engineer
+Objective
+Turn an arbitrary CV file into a validated, structured candidate profile that every downstream module can rely on.
+Input
+A CV supplied by webhook, n8n Form, file upload or Drive. .tex and .pdf mandatory, .docx optional. Sample: sample_cv.tex.
+What you build
+File validation — existence, size, extension, real MIME type; explicit logged rejection, never a silent pass.
+CV parsing — file to clean text; for LaTeX strip commands and environments while keeping section structure and order.
+LLM extraction — populate every required field of contract 3.1 with strict JSON output and an explicit ban on inventing values.
+Keyword extraction — the market-facing search terms that become Module 2's input.
+Output validation and repair — validate against the schema, retry with a repair prompt, then emit a structured error rather than a malformed profile.
+You must justify
+The LLM, compared against at least two alternatives on your own CVs (accuracy, JSON reliability, hallucination, latency, cost, context, n8n fit).
+Your text-extraction approach for LaTeX and PDF versus one alternative.
+Single-pass extraction vs field-by-field vs extract-then-verify.
+Your retry limit and what happens when it is exhausted.
+Test it alone with
+Five CVs: strong senior, junior, missing sections, LaTeX, PDF. Plus five negatives: empty file, wrong extension, corrupted PDF, oversized file, unusual layout.
+Measured on
+Field precision / recall / F1 per group (skills, tools, education, titles) against ground truth you labelled by hand.
+JSON validity rate before and after repair — valid outputs ÷ attempts.
+Hallucination rate — extracted items absent from the CV ÷ items extracted.
+Median and worst-case latency, and cost per CV.
+You submit
+module_1_cv_intelligence.json · model comparison matrix · versioned prompts · 5 CVs with expected vs actual output · P/R/F1 and negative-test results · decision records · documentation.pdf
+Done when
+It runs standalone on all five CVs and emits a valid contract-3.1 profile.
+All five negative cases are rejected without the workflow crashing.
+Every required field is populated, or explicitly null with a reason.
+Module 2 — Job Discovery · Student 2, Job Retrieval Engineer
+Objective
+Given a search configuration, retrieve vacancies from at least two independent sources and return a clean, normalised, de-duplicated dataset.
+Input
+sample_search_config.json — search terms, location, seniority, limits. Entered by hand during development; supplied by Module 1's keywords at integration.
+What you build
+Source selection — at least two sources returning genuinely different data. Two endpoints of one provider do not count.
+Query construction — map search terms onto each source's parameters, including pagination.
+Retrieval with rate-limit handling and backoff.
+Normalisation — map every source's schema onto contract 3.2. The mapping table is a deliverable.
+Description mining — pull required skills, preferred skills, experience, education, seniority and technologies out of free text.
+De-duplication — the same vacancy appears across sources with different IDs.
+Quality filtering — drop empty descriptions, missing title or company, invalid URLs; count and report what you dropped.
+You must justify
+Your sources, scored on job quality, reliability, volume, search capability, cost, documentation and n8n integration.
+Your de-duplication rule and threshold, with measured false merges and missed duplicates.
+Rules vs LLM for description mining, compared on accuracy and cost.
+What the module does when one source is down.
+Test it alone with
+Five search scenarios: broad term, narrow term, a term with no results, location-restricted, multi-term. Plus six forced failures: source down, timeout, empty result, rate limit, malformed response, missing fields.
+Measured on
+Retrieval volume per source per query.
+Relevance rate on a labelled sample of at least 30 retrieved jobs.
+De-duplication accuracy — correctly merged ÷ true duplicates, plus false merges.
+Normalisation completeness — records with all required contract fields ÷ total.
+API success rate per source, and median / p95 response time.
+You submit
+module_2_job_discovery.json · source comparison matrix · per-source field mapping table · de-duplication rule with measured accuracy · test queries and output dataset · error-handling evidence · decision records · documentation.pdf
+Done when
+It runs standalone from a manual search config and emits valid contract-3.2 jobs.json.
+It still returns usable results with one source deliberately disabled.
+No duplicate job_id and no record missing a required field.
+
+
+Module 3 — Matching & Ranking · Student 3, Matching & Recommendation Engineer
+Objective
+Given a candidate profile and a set of jobs, score every job, rank them, decide what to do with each, and explain the decision so a human can check it.
+Input
+sample_candidate_profile.json and sample_jobs.json. You start on day one with no dependency on Modules 1 or 2.
+What you build
+Method A, keyword matching — normalised skill overlap. SkillScore = matched required ÷ total required. Handle synonyms (JS/JavaScript, Postgres/PostgreSQL) and document the synonym table.
+Method B, semantic matching — embeddings with cosine similarity, a sentence-transformer, or LLM-judged similarity.
+Method C, hybrid — a weighted combination of skill, semantic, experience, preferred-skill, education, title and location components.
+Ranking with a defined, reproducible tie-breaker.
+Decision thresholds — APPLY / REVIEW / REJECT, calibrated on your own data rather than assumed.
+Explainability — matched and missing skills, experience comparison, component breakdown and a readable reason for every job.
+You must justify
+Your semantic approach versus one alternative (which embedding model, or embeddings vs LLM judgement).
+Every weight in the hybrid formula, with an ablation showing the measured effect of changing it.
+Your three thresholds, and the precision/recall trade-off each one buys.
+Your normalisation and synonym strategy.
+Test it alone with
+The sample data through all three methods, plus edge cases: a job listing no required skills, a candidate with zero experience, a perfect match, an unrelated job, and a job phrased very differently from the CV.
+Measured on
+Precision, recall and F1 against 20+ candidate–job pairs you labelled before tuning.
+Precision@K for K = 3, 5, 10, with K justified.
+Rank correlation (Spearman or Kendall) between your ranking and the human ranking.
+Threshold quality — how many APPLY decisions a human agrees with, and how many good jobs you rejected.
+A three-way comparison table: keyword vs semantic vs hybrid on the same labelled set.
+You submit
+module_3_matching_ranking.json · all three methods independently runnable · hybrid formula with weight justification and ablation · threshold calibration experiment · labelled dataset with the labelling instructions used · comparison table and analysis · decision records · documentation.pdf
+Done when
+It runs standalone on the sample files and emits valid contract-3.3 output.
+Every returned job carries a complete explanation.
+The three methods can be switched and compared without restructuring the workflow.
+
+
+Module 4 — CV Tailoring & Documents · Student 4, Generative AI & Document Engineer
+Objective
+Given the original CV and one selected vacancy, produce a tailored CV and cover letter that are relevant to the vacancy and strictly truthful to the original.
+Input
+sample_cv.tex plus sample_selected_job.json (job description, matched skills, missing skills). No dependency on Module 3.
+What you build
+Tailoring — rewrite the summary for the target role; re-order skills, experience and projects by relevance; align vocabulary with the vacancy where the underlying fact is the same.
+Hallucination detection — extract the facts from the original CV and the claims from the generated CV, compare, and flag anything unsupported.
+LaTeX generation — the modified .tex must still compile, preserving document class, packages, sections and list environments.
+PDF generation and verification — page count within limits, no missing sections, no broken layout.
+Cover letter — grounded in this candidate, this company and this vacancy. A template with the company name substituted does not satisfy this.
+Absolute rule
+The module never adds a skill, employer, degree, certification, project or year that is not in the original CV. Re-ordering and re-phrasing are allowed; invention is not. The sample data contains a deliberate trap for this.
+You must justify
+Model and generation strategy, compared on factual consistency, CV quality, job relevance, LaTeX preservation, cost and speed.
+How you verify facts — rules, LLM-as-judge, or both — and how you validated the verifier itself.
+Whole-document rewrite vs section-wise editing, and what that trades off.
+Your regeneration limit and the behaviour when it is exhausted.
+Test it alone with
+One CV against five different job descriptions, plus adversarial cases: a vacancy demanding a skill the candidate lacks, a vacancy in an unrelated field, and a mostly-boilerplate description.
+Measured on
+Factual consistency rate — generations with zero unsupported claims ÷ total.
+Average unsupported claims per generation, per model.
+Job relevance — rubric score 1–5 by two reviewers, with the rubric stated.
+LaTeX compilation success rate.
+Information preservation — important original items retained ÷ important original items.
+Time and cost per package.
+You submit
+module_4_cv_tailoring.json · original CV and five job descriptions · the five tailored .tex/.pdf files and cover letters · model comparison matrix · hallucination test results including the adversarial cases · LaTeX validation log · decision records · documentation.pdf
+Done when
+It runs standalone and emits valid contract-3.4 output.
+Zero unsupported claims across the five standard test cases.
+Every generated .tex compiles.
+The five cover letters differ from each other in substance, not just in the company name.
+
+
+Module 5 — Application & Tracking · Student 5, Automation & Operations Engineer
+Objective
+Take a ready application package and manage everything after it: approval, submission, persistence, notification, failure recovery and reporting.
+Input
+sample_application_package.json. No dependency on Module 4.
+What you build
+Human approval gate — present the application, pause until a decision arrives, and handle the case where nobody answers. Implement via n8n Form, email action links, webhook or a messaging bot.
+Submission — HTTP API, email with attachments, or a realistic mock endpoint where real automated submission is not appropriate or permitted.
+Duplicate protection — check before submitting whether this candidate already applied to this job.
+Tracking store — persist every application with its full record (Sheets, MySQL, PostgreSQL, Supabase or Airtable).
+Confirmation notification with the tailored CV and cover letter attached.
+Retry logic — backoff, maximum attempts, and a logged permanent failure with enough context to diagnose it.
+Logging and statistics — a readable trail per application, and totals for submitted, failed, rejected, pending and duplicates blocked.
+You must justify
+Your approval channel versus two alternatives, and your approval timeout value.
+Your storage choice, on setup cost, query capability, reliability and team access.
+Your duplicate key definition.
+Which error classes are retried, how many times and with what backoff — and why the others are not.
+Test it alone with
+Ten scenarios: approved and submitted; rejected at approval; no response until timeout; duplicate blocked; API down then recovering; permanent submission failure; email failure; missing attachment; database unavailable; malformed package.
+Measured on
+Submission success rate — successful ÷ approved.
+Duplicate prevention accuracy — blocked ÷ attempted, plus false blocks.
+Notification delivery rate.
+Error recovery rate — injected transient failures that eventually succeeded.
+Tracking accuracy — records matching the true outcome ÷ total records.
+Median time from package received to confirmation sent, excluding human wait.
+You submit
+module_5_application_tracking.json · approval and submission demonstrations (mock clearly labelled) · populated tracking store · duplicate protection evidence · sample confirmation email with attachments · error and retry results, logs, statistics view · decision records · documentation.pdf
+Done when
+It runs standalone on a mock package and emits valid contract-3.5 output.
+Nothing is ever submitted without a recorded approval.
+Repeated runs of the same package never produce a duplicate submission.
+Every injected failure ends in a logged, recovered or explicitly failed state — never a silent stop.
+
+
+5. How the five modules come together
+Entry condition
+Integration starts only when all five modules independently meet their "Done when" criteria. Integrating a half-finished module produces failures nobody can attribute to anyone.
+The Integration Lead
+The team nominates one member, in addition to their module role, to maintain the contract document, the change log and the integration workflow. It is a coordination duty, not extra ownership — the Integration Lead does not edit anyone's module.
+The black-box rule
+No student edits another student's workflow. Problems are reported at the boundary — "Module 2 emitted a record with no application_url" — not fixed inside someone else's module.
+If a fix needs a contract change, it goes through 3.6. Nothing is patched quietly.
+Order of connection
+Connect in pairs, so every failure has at most one new suspect. Wiring all five at once and debugging the result is the slowest possible route.
+Step
+Connect
+Smoke test
+1
+M1 → M3
+Real profile with sample jobs: does M3 score without schema errors?
+2
+M2 → M3
+Sample profile with real jobs: the same check from the other side
+3
+M1 + M2 → M3
+Full upstream, real ranking output
+4
+M3 → M4
+The top-ranked job reaches tailoring with every field it needs
+5
+M4 → M5
+The package reaches approval with valid file references
+6
+End to end
+CV in; tracked, confirmed application out
+Contract test before each connection
+The consuming module runs these six checks on the producer's real output — not on the sample file:
+All required fields present, correctly named and correctly typed.
+schema_version matches the agreed contract version.
+Identifiers stable and unique across runs.
+Arrays are arrays; nulls are explicit.
+Behaviour on an empty result set is defined on both sides.
+A deliberately malformed payload is rejected with a clear error, not silently absorbed.
+Mechanics in n8n
+Complete_Job_Hunter.json
+ ├── Execute Workflow → Module 1 candidate_profile
+ ├── Execute Workflow → Module 2 jobs
+ ├── Execute Workflow → Module 3 ranked_jobs
+ ├── Loop over decision = APPLY
+ │ ├── Execute Workflow → Module 4 application_package
+ │ └── Execute Workflow → Module 5 application_status
+ └── Final run report
+Execute Workflow nodes are the default. Webhooks, HTTP Request nodes, files or a shared database are acceptable alternatives where you can say why — a module that must run on its own schedule, or a payload too large to pass inline. Whichever you use, document it in the architecture section.
+The end-to-end acceptance run
+One complete demonstration: a real CV goes in; a profile is extracted; jobs are retrieved from at least two sources; jobs are ranked with explanations; an APPLY job is tailored into a truthful CV and cover letter; a human approves; it is submitted; the tracking store shows the record; the candidate receives a confirmation. Failures at any stage must be visible and explainable, not silent.
+
+
+6. How you will be evaluated
+Two things carry most of the weight in this project: whether you can defend your choices, and whether you can measure your own work. This section is the method for both.
+6.1 Defending a choice
+Use a weighted matrix wherever you pick between named alternatives. Four steps: list the criteria that actually matter for your module and say why; assign weights summing to 100% and justify them; score each option 1–5, based on measurement wherever measurement is possible; compute the weighted total and state the decision, including any reason you overrode the numbers.
+Criterion
+Weight
+A
+B
+C
+Why this criterion matters here
+Extraction accuracy
+30%
+4
+5
+3
+Errors propagate into every downstream module
+Structured JSON reliability
+20%
+3
+5
+4
+Invalid JSON breaks the contract
+Hallucination rate
+15%
+3
+4
+2
+Invented skills create false matches
+Response time
+10%
+5
+3
+4
+Affects end-to-end run time
+Cost
+10%
+2
+5
+5
+Per-CV cost at volume
+Context window
+5%
+5
+4
+3
+Long CVs must fit in one pass
+n8n integration
+10%
+5
+4
+3
+Native node vs custom HTTP handling
+Weighted total
+100%
+3.60
+4.55
+3.30
+Option B selected
+The example is illustrative — your criteria and weights must reflect your own module's constraints. Weights are declared before testing, not adjusted afterwards to produce the answer you already wanted.
+Each module produces roughly four to eight decision records (template in the appendix). "Significant" means another competent engineer could reasonably have chosen differently.
+This loses marks
+Because
+"It is the most popular / most used"
+Popularity is a proxy for criteria you have not named
+Weights invented after seeing results
+The matrix then documents a preference, not a decision
+Only one option ever considered
+There was no decision to justify
+Scores with no measurement behind them
+Unfalsifiable — the matrix becomes decoration
+No limitation acknowledged
+Every choice costs something; not naming it suggests you did not look
+
+
+
+
+6.2 Measuring your module
+Build the labelled data before you tune anything, and write down the labelling rules so a second person applying them would produce roughly the same labels.
+Module
+Minimum ground truth you must build
+1
+5 CVs with every extractable field labelled by hand
+2
+30+ retrieved jobs labelled relevant / not relevant, plus a known duplicate set
+3
+20+ candidate–job pairs labelled relevant / not relevant, or scored 1–5
+4
+5 tailored outputs reviewed for factual consistency and relevance against a stated rubric
+5
+10 scenarios with a defined expected outcome for each
+Precision = TP / (TP + FP) of what I returned, how much was right
+Recall = TP / (TP + FN) of what was right, how much I found
+F1 = 2·P·R / (P + R) always report all three, never F1 alone
+Precision@K = relevant in top K / K MAE = mean(|predicted − human|)
+Every experiment reports the same six things: the question, the setup (data, size, method, parameters), the metric and why it fits, the numbers including denominators, the interpretation and what you changed as a result, and the limitation.
+Note: A small honest result beats a large unverifiable claim. Ten labelled pairs with a clear method scores better than "about 90% accurate" with no method behind it. Fabricated results — numbers with no experiment underneath — are treated as academic misconduct, not as a weak submission.
+
+
+6.3 Your individual mark
+Criterion
+Marks
+Full marks means
+Module functionality
+4
+Runs standalone, handles the specified inputs, produces contract-valid output, covers the listed tasks
+Technical design
+2
+Clean structure, sensible node organisation, no duplicated logic, readable at a glance
+AI / algorithm / API quality
+2
+The core technique is implemented properly rather than superficially; parameters are deliberate
+Testing
+2
+The required cases plus negative and edge cases, with evidence
+Evaluation & results
+2
+Ground truth built, right metrics, honest numbers, interpretation and limitations
+Error handling
+1
+Failures are caught, logged and recoverable; nothing fails silently
+Documentation
+1
+Someone else could run and understand your module from the document alone
+Individual discussion
+1
+You can explain any node and defend every major decision
+Total
+15
+
+6.4 The team mark — 25 shared
+Criterion
+Marks
+Full marks means
+Module integration
+8
+All five connect through the agreed contracts with no ad-hoc patching
+End-to-end workflow
+5
+A complete run from CV to tracked, confirmed application
+Data consistency
+3
+Identifiers and field names survive the pipeline; no silent transformations
+Architecture
+2
+Documented, coherent, and matching what was actually built
+Final evaluation
+2
+System-level results synthesised, not five reports stapled together
+Report
+2
+Complete, structured, honest about limitations
+Demo
+2
+Live and working, showing failure cases as well as the happy path
+Presentation
+1
+Every member presents their own module
+Total
+25
+
+6.5 Deductions
+A module that cannot run standalone at the discussion loses its functionality marks, however well it behaves inside the integrated system.
+A student who cannot explain their own workflow loses the discussion mark and has the functionality mark reviewed.
+Undocumented decisions lose evaluation marks even when the choice itself was sound.
+Contract violations found at integration are deducted from Data Consistency, from producer and consumer alike.
+
+
+7. Milestones, submission and rules
+7.1 Milestones
+#
+Milestone
+Each student submits
+Team submits
+M1
+Module design & contract freeze
+Architecture, input/output spec, technology shortlist, alternatives considered, n8n skeleton
+Signed contract v1.0
+M2
+Independent prototype
+Module running end to end on mock input, happy path
+—
+M3
+Module intelligence
+AI, algorithms, APIs and automation logic complete; error handling in place
+Change log, if any
+M4
+Testing & evaluation
+Test cases, experiments, selection matrices, decision records, results
+—
+M5
+Integration
+Module internally unchanged; contract tests passed
+Integrated workflow, integration test log
+M6
+Final system
+Final documentation, ready for the individual discussion
+Demo, final report, presentation, evaluation summary
+7.2 What you hand in
+Student_<N>_Module_<N>_<FullName>/ Job_Hunter_Agent_<Team>/
+├── workflow/module_<N>.json ├── Module_1 … Module_5/
+├── test_data/ ├── Integration/
+├── outputs/ │ ├── Complete_Job_Hunter.json
+├── evaluation/ │ ├── interface_contract_v1.pdf
+│ ├── ground_truth.(csv|json) │ ├── change_log.md
+│ └── results.(xlsx|pdf) │ └── integration_test_log.pdf
+├── decisions/ ├── Architecture/
+├── screenshots/ ├── Demo/ (recorded run, mp4)
+└── documentation.pdf └── Final_Report.pdf
+documentation.pdf contains: the module's purpose and place in the system; its input/output spec with a worked example; a walkthrough of what each significant node does and why it exists; the decision records; the test plan and results including negatives; the evaluation with method, numbers, interpretation and limitations; known issues; and a short note on what went wrong during development and how you diagnosed it.
+7.3 Rules
+AI tools. Expected — this is a project about building with AI. Two conditions: disclose where AI helped you produce the deliverable as opposed to being a component inside the system, and own everything you submit. Anything you cannot explain is not yours for grading.
+Sources. Do not scrape any site against its terms of service. If a source forbids automated access, use a different one and say why.
+Real applications. Never submit to a real employer on anyone's behalf without their explicit consent. A mock endpoint costs you no marks.
+Personal data. Use your own CV, a teammate's with permission, or a synthetic one. Never a stranger's.
+Credentials. In n8n credentials only — never inline in nodes, never in the exported workflow, redacted in screenshots.
+Truthfulness. A system that improves someone's chances by misrepresenting them is a failed system, whatever its metrics say.
+Individual accountability. Team marks are shared; module marks are not. A strong team cannot carry a module that does not run, and a student who did not build their module does not receive its marks.

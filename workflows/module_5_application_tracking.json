@@ -1,0 +1,445 @@
+{
+  "name": "Module 5 - Application & Tracking",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        80,
+        300
+      ],
+      "id": "m5-trigger",
+      "name": "01 - Receive Application Package"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:3000/api/applications/check-duplicate",
+        "sendBody": true,
+        "contentType": "json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "candidate_id",
+              "value": "={{ $json.candidate_id }}"
+            },
+            {
+              "name": "job_id",
+              "value": "={{ $json.job_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        250,
+        300
+      ],
+      "id": "check-duplicate",
+      "name": "02 - Check Duplicate Application"
+    },
+    {
+      "parameters": {
+        "jsCode": "const duplicateCheck = $node[\"02 - Check Duplicate Application\"].json;\nconst pkg = $node[\"01 - Receive Application Package\"].json;\n\n// Generate a unique application ID\nconst appId = 'app_' + Math.random().toString(36).substring(2, 8);\n\nreturn [{\n  json: {\n    application_id: appId,\n    duplicate: duplicateCheck.duplicate,\n    package: pkg\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        430,
+        300
+      ],
+      "id": "route-duplicate",
+      "name": "03 - Handle Duplicate Route"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:3000/api/applications",
+        "sendBody": true,
+        "contentType": "json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "application_id",
+              "value": "={{ $json.application_id }}"
+            },
+            {
+              "name": "candidate_id",
+              "value": "={{ $json.package.candidate_id }}"
+            },
+            {
+              "name": "job_id",
+              "value": "={{ $json.package.job_id }}"
+            },
+            {
+              "name": "company",
+              "value": "={{ $json.package.company }}"
+            },
+            {
+              "name": "job_title",
+              "value": "={{ $json.package.job_title }}"
+            },
+            {
+              "name": "approval_decision",
+              "value": "={{ $json.duplicate ? 'REJECTED' : 'PENDING' }}"
+            },
+            {
+              "name": "application_status",
+              "value": "={{ $json.duplicate ? 'skipped_duplicate' : 'pending_approval' }}"
+            },
+            {
+              "name": "submission_method",
+              "value": "mock"
+            },
+            {
+              "name": "attempts",
+              "value": 0
+            },
+            {
+              "name": "confirmation_sent",
+              "value": false
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        610,
+        300
+      ],
+      "id": "register-pending",
+      "name": "04 - Register Pending Application"
+    },
+    {
+      "parameters": {
+        "timeout": 120
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [
+        790,
+        300
+      ],
+      "id": "wait-approval",
+      "name": "05 - Wait for Human Approval"
+    },
+    {
+      "parameters": {
+        "jsCode": "const decisionData = $input.all()[0]?.json || {};\nreturn [{\n  json: {\n    ...$node[\"03 - Handle Duplicate Route\"].json,\n    approval_decision: decisionData.decision || 'REJECTED',\n    application_status: decisionData.decision === 'APPROVED' ? 'pending_submission' : 'skipped_human_rejection'\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        970,
+        200
+      ],
+      "id": "process-approval",
+      "name": "06 - Process Human Decision"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:3000/api/mock/submit-application",
+        "sendBody": true,
+        "contentType": "json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "candidate_id",
+              "value": "={{ $json.package.candidate_id }}"
+            },
+            {
+              "name": "job_id",
+              "value": "={{ $json.package.job_id }}"
+            },
+            {
+              "name": "cv_file",
+              "value": "={{ $json.package.cv_file }}"
+            },
+            {
+              "name": "cover_letter_file",
+              "value": "={{ $json.package.cover_letter_file }}"
+            }
+          ]
+        },
+        "options": {},
+        "onError": "continueRegularOutput"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1150,
+        200
+      ],
+      "id": "mock-submit",
+      "name": "07 - Submit Application Package"
+    },
+    {
+      "parameters": {
+        "jsCode": "const state = $node[\"06 - Process Human Decision\"].json;\nconst submitRes = $node[\"07 - Submit Application Package\"].json || {};\n\nif (state.application_status === 'skipped_human_rejection') {\n  return [{ json: {\n    application_id: state.application_id,\n    candidate_id: state.package.candidate_id,\n    job_id: state.package.job_id,\n    company: state.package.company,\n    job_title: state.package.job_title,\n    approval_decision: \"REJECTED\",\n    application_status: \"skipped_human_rejection\",\n    submission_method: \"mock\",\n    attempts: 0,\n    confirmation_sent: false\n  }}];\n}\n\nlet status = 'failed';\nlet confSent = false;\nlet errorPayload = null;\n\nif (submitRes.success) {\n  status = 'submitted';\n  confSent = true;\n} else {\n  errorPayload = {\n    code: \"SUBMISSION_FAILED\",\n    message: submitRes.error || \"Portal upload error\",\n    stage: \"submission\"\n  };\n}\n\nreturn [{\n  json: {\n    application_id: state.application_id,\n    candidate_id: state.package.candidate_id,\n    job_id: state.package.job_id,\n    company: state.package.company,\n    job_title: state.package.job_title,\n    approval_decision: \"APPROVED\",\n    application_status: status,\n    submission_method: \"mock\",\n    attempts: 1,\n    confirmation_sent: confSent,\n    error: errorPayload\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1330,
+        200
+      ],
+      "id": "record-outcome",
+      "name": "08 - Record Submission Outcome"
+    },
+    {
+      "parameters": {
+        "jsCode": "const state = $node[\"03 - Handle Duplicate Route\"].json;\nreturn [{\n  json: {\n    application_id: state.application_id,\n    candidate_id: state.package.candidate_id,\n    job_id: state.package.job_id,\n    company: state.package.company,\n    job_title: state.package.job_title,\n    approval_decision: \"REJECTED\",\n    application_status: \"skipped_timeout\",\n    submission_method: \"mock\",\n    attempts: 0,\n    confirmation_sent: false,\n    error: {\n      code: \"TIMEOUT\",\n      message: \"No response from human operator before timeout.\",\n      stage: \"approval\"\n    }\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        970,
+        400
+      ],
+      "id": "handle-timeout",
+      "name": "11 - Process Timeout Decision"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:3000/api/applications",
+        "sendBody": true,
+        "contentType": "json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "application_id",
+              "value": "={{ $json.application_id }}"
+            },
+            {
+              "name": "candidate_id",
+              "value": "={{ $json.candidate_id }}"
+            },
+            {
+              "name": "job_id",
+              "value": "={{ $json.job_id }}"
+            },
+            {
+              "name": "company",
+              "value": "={{ $json.company }}"
+            },
+            {
+              "name": "job_title",
+              "value": "={{ $json.job_title }}"
+            },
+            {
+              "name": "approval_decision",
+              "value": "={{ $json.approval_decision }}"
+            },
+            {
+              "name": "application_status",
+              "value": "={{ $json.application_status }}"
+            },
+            {
+              "name": "submission_method",
+              "value": "={{ $json.submission_method }}"
+            },
+            {
+              "name": "attempts",
+              "value": "={{ $json.attempts }}"
+            },
+            {
+              "name": "confirmation_sent",
+              "value": "={{ $json.confirmation_sent }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1510,
+        300
+      ],
+      "id": "persist-db",
+      "name": "09 - Persist Final Status"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:3000/api/validate-contract",
+        "sendBody": true,
+        "contentType": "json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "schema_type",
+              "value": "application_status"
+            },
+            {
+              "name": "payload",
+              "value": "={{ $json }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1690,
+        300
+      ],
+      "id": "validate-contract",
+      "name": "10 - Validate Contract"
+    },
+    {
+      "parameters": {
+        "jsCode": "const check = $node[\"10 - Validate Contract\"].json;\nif (!check.valid) {\n  throw new Error('Contract schema violation on application_status: ' + JSON.stringify(check.errors));\n}\nreturn [{ json: $node[\"09 - Persist Final Status\"].json }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1870,
+        300
+      ],
+      "id": "return-status",
+      "name": "12 - Return Final Status"
+    }
+  ],
+  "connections": {
+    "01 - Receive Application Package": {
+      "main": [
+        [
+          {
+            "node": "02 - Check Duplicate Application",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "02 - Check Duplicate Application": {
+      "main": [
+        [
+          {
+            "node": "03 - Handle Duplicate Route",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "03 - Handle Duplicate Route": {
+      "main": [
+        [
+          {
+            "node": "04 - Register Pending Application",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "04 - Register Pending Application": {
+      "main": [
+        [
+          {
+            "node": "05 - Wait for Human Approval",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "05 - Wait for Human Approval": {
+      "main": [
+        [
+          {
+            "node": "06 - Process Human Decision",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "11 - Process Timeout Decision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "06 - Process Human Decision": {
+      "main": [
+        [
+          {
+            "node": "07 - Submit Application Package",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "07 - Submit Application Package": {
+      "main": [
+        [
+          {
+            "node": "08 - Record Submission Outcome",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "08 - Record Submission Outcome": {
+      "main": [
+        [
+          {
+            "node": "09 - Persist Final Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "11 - Process Timeout Decision": {
+      "main": [
+        [
+          {
+            "node": "09 - Persist Final Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "09 - Persist Final Status": {
+      "main": [
+        [
+          {
+            "node": "10 - Validate Contract",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "10 - Validate Contract": {
+      "main": [
+        [
+          {
+            "node": "12 - Return Final Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {},
+  "id": "m5-workflow"
+}

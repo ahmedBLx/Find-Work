@@ -1,0 +1,13 @@
+Charlie Miller
+charlie.miller@example.com
+
+SKILLS
+Node.js, Express, JavaScript, PostgreSQL
+
+EXPERIENCE
+Developer | CodeCo | 2022 - Present
+- Maintained legacy Express services.
+- Wrote basic SQL queries.
+
+EDUCATION
+High School Diploma | Central High | 2018

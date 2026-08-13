@@ -1,0 +1,14 @@
+{
+  "application_id": "app_e2f410",
+  "candidate_id": "cand_98a72b",
+  "job_id": "job_001",
+  "company": "Tech Innovations Inc.",
+  "job_title": "Backend Engineer",
+  "approval_decision": "APPROVED",
+  "application_status": "submitted",
+  "submission_method": "mock",
+  "submitted_at": "2026-08-13T16:15:00Z",
+  "attempts": 1,
+  "confirmation_sent": true,
+  "error": null
+}

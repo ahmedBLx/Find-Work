@@ -1,0 +1,18 @@
+============================================================
+RESUME // DAVID SHIELD // ENGINEER // EMAIL: david@example.com
+============================================================
+
+INFO: Phone: +1-555-0888 | Location: Chicago, IL | Status: Available
+
+PROFILE: Software engineer with 6 years experience in building web systems.
+
+KEYSKILLS: [Node.js] [JavaScript] [Docker] [PostgreSQL] [AWS] [Redis] [API]
+
+CAREER DETAILS:
+- Senior Developer - Shielder Logistics (Jan 2021 to Present)
+  * Architected microservice layers. Maintained Docker containers. Deployed to AWS.
+- Backend Engineer - WebApps Inc. (May 2018 to Dec 2020)
+  * Wrote backend REST APIs in Node.js and Express. Optimized PostgreSQL.
+
+ACADEMICS:
+- BS Computer Science - Tech Institute of Chicago - Year 2018

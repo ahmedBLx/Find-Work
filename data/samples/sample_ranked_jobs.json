@@ -1,0 +1,128 @@
+[
+  {
+    "schema_version": "1.0",
+    "job_id": "job_001",
+    "job_title": "Backend Engineer",
+    "company": "Tech Innovations Inc.",
+    "location": "New York, NY (Hybrid)",
+    "source": "Source A (GlobalJobs API)",
+    "description": "We are looking for a Backend Engineer with strong expertise in Node.js, Express, and SQL databases. You will design and deploy REST APIs and work with Docker. Experience with React is a plus. Candidates should have a BS in Computer Science and at least 3 years of experience.",
+    "application_url": "https://techinnovations.example/apply/job_001",
+    "required_skills": ["Node.js", "Express", "SQL", "Docker", "REST APIs"],
+    "retrieved_at": "2026-08-13T16:01:00Z",
+    "employment_type": "Full-time",
+    "seniority_level": "Mid-Senior",
+    "salary": "$120,000 - $140,000",
+    "education_requirement": "Bachelor's in Computer Science",
+    "required_experience_years": 3,
+    "preferred_skills": ["React", "PostgreSQL"],
+    "technologies": ["Node.js", "Express", "Docker", "PostgreSQL"],
+    "match_score": 92.5,
+    "score_breakdown": {
+      "keyword_score": 90.0,
+      "semantic_score": 95.0,
+      "experience_score": 100.0,
+      "weights": {
+        "keyword": 0.3,
+        "semantic": 0.4,
+        "experience": 0.3
+      }
+    },
+    "matched_skills": ["Node.js", "Express", "SQL", "Docker", "REST APIs"],
+    "missing_skills": [],
+    "experience_match": {
+      "candidate_years": 5.5,
+      "required_years": 3,
+      "satisfied": true
+    },
+    "semantic_similarity": 0.95,
+    "decision": "APPLY",
+    "explanation": "The candidate matches all required technical skills (Node.js, Express, SQL/PostgreSQL, Docker) and exceeds the required 3 years of experience (has 5.5 years). Excellent semantic alignment with backend engineering tasks.",
+    "method": "hybrid",
+    "ranked_at": "2026-08-13T16:05:00Z"
+  },
+  {
+    "schema_version": "1.0",
+    "job_id": "job_002",
+    "job_title": "Frontend Developer",
+    "company": "DesignCo Studio",
+    "location": "Remote",
+    "source": "Source B (TechCareers API)",
+    "description": "Join our team as a Frontend Developer. You should be expert in React, HTML, CSS, and modern Javascript. Experience with Node.js backend integration is good but this is a pure frontend layout role. Minimum 2 years experience.",
+    "application_url": "https://designco.example/careers/frontend-dev",
+    "required_skills": ["React", "HTML", "CSS", "JavaScript"],
+    "retrieved_at": "2026-08-13T16:01:05Z",
+    "employment_type": "Full-time",
+    "seniority_level": "Mid",
+    "salary": "$90,000 - $105,000",
+    "education_requirement": "None",
+    "required_experience_years": 2,
+    "preferred_skills": ["Tailwind CSS", "Git"],
+    "technologies": ["React", "JavaScript", "HTML", "CSS"],
+    "match_score": 68.2,
+    "score_breakdown": {
+      "keyword_score": 50.0,
+      "semantic_score": 75.0,
+      "experience_score": 100.0,
+      "weights": {
+        "keyword": 0.3,
+        "semantic": 0.4,
+        "experience": 0.3
+      }
+    },
+    "matched_skills": ["React", "JavaScript"],
+    "missing_skills": ["HTML", "CSS"],
+    "experience_match": {
+      "candidate_years": 5.5,
+      "required_years": 2,
+      "satisfied": true
+    },
+    "semantic_similarity": 0.75,
+    "decision": "REVIEW",
+    "explanation": "The candidate has experience with React and JavaScript, but lacks explicit HTML/CSS on their skill keywords. Experience exceeds requirements.",
+    "method": "hybrid",
+    "ranked_at": "2026-08-13T16:05:00Z"
+  },
+  {
+    "schema_version": "1.0",
+    "job_id": "job_003",
+    "job_title": "Data Scientist",
+    "company": "Data Insights Corp.",
+    "location": "Boston, MA",
+    "source": "Source A (GlobalJobs API)",
+    "description": "Seeking a Data Scientist to build machine learning models in Python. Experience with Pandas, NumPy, Scikit-Learn, and SQL is required. PyTorch or TensorFlow is preferred. PhD or MS in Statistics/CS required. Minimum 5 years experience.",
+    "application_url": "https://datainsights.example/jobs/data-scientist",
+    "required_skills": ["Python", "Pandas", "SQL", "Machine Learning"],
+    "retrieved_at": "2026-08-13T16:01:10Z",
+    "employment_type": "Full-time",
+    "seniority_level": "Senior",
+    "salary": "$150,000 - $180,000",
+    "education_requirement": "Master's or PhD in Statistics/CS",
+    "required_experience_years": 5,
+    "preferred_skills": ["PyTorch", "TensorFlow"],
+    "technologies": ["Python", "SQL", "Pandas", "Scikit-Learn"],
+    "match_score": 38.5,
+    "score_breakdown": {
+      "keyword_score": 25.0,
+      "semantic_score": 40.0,
+      "experience_score": 50.0,
+      "weights": {
+        "keyword": 0.3,
+        "semantic": 0.4,
+        "experience": 0.3
+      }
+    },
+    "matched_skills": ["Python", "SQL"],
+    "missing_skills": ["Pandas", "Machine Learning"],
+    "experience_match": {
+      "candidate_years": 5.5,
+      "required_years": 5,
+      "satisfied": true
+    },
+    "semantic_similarity": 0.4,
+    "decision": "REJECT",
+    "explanation": "The candidate has Python and SQL skills, but lacks core Machine Learning experience and Pandas. Unrelated field.",
+    "method": "hybrid",
+    "ranked_at": "2026-08-13T16:05:00Z"
+  }
+]

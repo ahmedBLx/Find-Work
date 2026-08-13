@@ -1,0 +1,26 @@
+Alex Mercer
+alex.mercer@example.com
++1-555-0210
+San Francisco, CA
+
+SUMMARY
+Principal Software Engineer with over 12 years of experience architecting high-throughput distributed systems and leading engineering teams. Specializing in Node.js, microservices, system architecture, and cloud migrations.
+
+EXPERIENCE
+Principal Engineer | CloudScale Tech | Jan 2021 - Present
+- Designed and built a real-time event streaming pipeline processing 10B+ daily events using Node.js, Kafka, and Redis.
+- Led migration from monolithic architecture to Dockerized microservices, reducing infrastructure costs by 45%.
+- Mentored 15+ senior engineers and established coding standards across 4 squads.
+
+Senior Staff Engineer | DataCore Systems | Mar 2016 - Dec 2020
+- Built and scaled a distributed search cluster handling 50k requests/sec using Elasticsearch and PostgreSQL.
+- Optimized query structures and implemented Redis caching, reducing p99 latency by 200ms.
+
+TECHNICAL SKILLS
+- Programming Languages: JavaScript, TypeScript, Python, SQL, Go
+- Frameworks: Node.js, Express, NestJS, FastAPI
+- Infrastructure/Tools: Docker, Kubernetes, AWS, Kafka, Redis, PostgreSQL, Git
+
+EDUCATION
+Master of Science in Computer Science | Stanford University | Graduated 2015
+Bachelor of Science in Software Engineering | UC Berkeley | Graduated 2012

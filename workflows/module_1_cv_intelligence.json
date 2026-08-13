@@ -1,0 +1,528 @@
+{
+  "name": "Module 1 - CV Intelligence",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        80,
+        300
+      ],
+      "id": "trigger-id",
+      "name": "01 - Receive CV"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ !!$json.tempFilePath }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        250,
+        300
+      ],
+      "id": "check-exists-id",
+      "name": "02 - Validate File Exists"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.filename }}",
+              "operation": "regex",
+              "value2": "^.*\\.(pdf|docx|txt)$"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        430,
+        200
+      ],
+      "id": "check-ext-id",
+      "name": "03 - Validate Extension"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.mimeType }}",
+              "operation": "regex",
+              "value2": "^(application/pdf|text/plain|application/vnd.openxmlformats-officedocument.wordprocessingml.document|application/octet-stream)$"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        610,
+        100
+      ],
+      "id": "check-mime-id",
+      "name": "04 - Validate MIME"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.size }}",
+              "operation": "smallerEqual",
+              "value2": 5242880
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        790,
+        50
+      ],
+      "id": "check-size-id",
+      "name": "05 - Validate File Size"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:3000/api/cv/parse",
+        "sendBody": true,
+        "contentType": "json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "tempFilePath",
+              "value": "={{ $json.tempFilePath }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        980,
+        30
+      ],
+      "id": "parse-id",
+      "name": "06 - Parse CV File"
+    },
+    {
+      "parameters": {
+        "jsCode": "const text = $json.parsed_text || '';\nconst prompt = `You are an expert resume parser AI. Your task is to extract structured information from the following resume text and format it exactly according to the JSON schema.\\n\\nResume Text:\\n${text}\\n\\nJSON Schema specifications:\\n- schema_version: \"1.0\"\\n- candidate_id: A unique short random string (e.g. \"cand_98a72b\")\\n- candidate_name: String\\n- email: String\\n- phone: String or null\\n- location: String or null\\n- experience_years: Number (total years of professional experience)\\n- job_titles: Array of strings\\n- preferred_roles: Array of strings\\n- technical_skills: Array of strings\\n- programming_languages: Array of strings\\n- frameworks: Array of strings\\n- tools: Array of strings\\n- keywords: Array of market-facing search terms (e.g., \"Backend Engineer\", \"Node.js Developer\")\\n- soft_skills: Array of strings\\n- certifications: Array of strings\\n- education: Array of objects containing: degree, field, institution, year\\n- projects: Array of objects containing: name, description, technologies (array of strings)\\n- extraction_meta: Object containing: model (\"gemini-1.5-flash\"), prompt_version (\"1.0\"), extracted_at (current ISO timestamp), confidence (number between 0 and 1)\\n\\nReturn ONLY valid JSON. Do not include markdown wraps or anything else.`;\n\nreturn [{\n  json: {\n    prompt: prompt,\n    retry_count: 0,\n    original_text: text\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1160,
+        30
+      ],
+      "id": "init-state-id",
+      "name": "07 - Initialize State"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:3000/api/llm/generate",
+        "sendBody": true,
+        "contentType": "json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "prompt",
+              "value": "={{ $json.prompt }}"
+            },
+            {
+              "name": "jsonMode",
+              "value": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1340,
+        30
+      ],
+      "id": "llm-generate-id",
+      "name": "08 - LLM Extraction"
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $node[\"08 - LLM Extraction\"].json;\nconst state = $node[\"07 - Initialize State\"].json;\nlet parsedPayload = null;\nlet parseError = null;\n\n// Strip common LLM markdown wrapper tags if present\nlet text = response.text || '';\ntext = text.replace(/```json/g, '').replace(/```/g, '').trim();\n\ntry {\n  parsedPayload = JSON.parse(text);\n} catch (e) {\n  parseError = 'Invalid JSON: ' + e.message;\n}\n\nreturn [{\n  json: {\n    payload: parsedPayload,\n    parse_error: parseError,\n    raw_response: text,\n    retry_count: $json.retry_count,\n    original_text: state.original_text\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1520,
+        30
+      ],
+      "id": "json-parse-id",
+      "name": "09 - JSON Parsing"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:3000/api/validate-contract",
+        "sendBody": true,
+        "contentType": "json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "schema_type",
+              "value": "candidate_profile"
+            },
+            {
+              "name": "payload",
+              "value": "={{ $json.payload }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1700,
+        30
+      ],
+      "id": "schema-check-id",
+      "name": "10 - Schema Validation"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $node[\"09 - JSON Parsing\"].json.parse_error === null && $json.valid === true }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1880,
+        30
+      ],
+      "id": "check-valid-if",
+      "name": "11 - Check Validation Success"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: $node[\"09 - JSON Parsing\"].json.payload }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2080,
+        30
+      ],
+      "id": "return-id",
+      "name": "12 - Return candidate_profile.json"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $node[\"09 - JSON Parsing\"].json.retry_count }}",
+              "operation": "smaller",
+              "value2": 3
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        2080,
+        200
+      ],
+      "id": "check-retry-if",
+      "name": "13 - Verify Retry Count"
+    },
+    {
+      "parameters": {
+        "jsCode": "const parserState = $node[\"09 - JSON Parsing\"].json;\nconst validationResult = $node[\"10 - Schema Validation\"].json;\n\nconst newRetryCount = parserState.retry_count + 1;\nconst validationErrors = parserState.parse_error || JSON.stringify(validationResult.errors);\n\nconst repairPrompt = `The previous JSON output failed contract schema validation with the following errors:\\n${validationErrors}\\n\\nPlease repair the JSON output to correct these errors. Ensure it complies exactly with the schema and is a valid JSON object.\\n\\nPrevious Output:\\n${parserState.raw_response}`;\n\nreturn [{\n  json: {\n    prompt: repairPrompt,\n    retry_count: newRetryCount,\n    original_text: parserState.original_text\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2280,
+        150
+      ],
+      "id": "prepare-repair-id",
+      "name": "14 - Prepare Repair Prompt"
+    },
+    {
+      "parameters": {
+        "jsCode": "const parserState = $node[\"09 - JSON Parsing\"].json;\nconst validationResult = $node[\"10 - Schema Validation\"].json;\nconst errors = parserState.parse_error || JSON.stringify(validationResult.errors);\n\nthrow new Error('M1 CV Intelligence permanently failed after 3 attempts. Errors: ' + errors);"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2280,
+        300
+      ],
+      "id": "fail-loud-id",
+      "name": "15 - Emit Validation Error"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { success: false, error: 'File validation failed: File does not exist.' } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        430,
+        450
+      ],
+      "id": "reject-exists",
+      "name": "Reject - Missing File"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { success: false, error: 'File validation failed: Invalid extension. Supported: .pdf, .docx, .txt.' } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        610,
+        350
+      ],
+      "id": "reject-ext",
+      "name": "Reject - Invalid Extension"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { success: false, error: 'File validation failed: Invalid MIME type.' } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        790,
+        250
+      ],
+      "id": "reject-mime",
+      "name": "Reject - Invalid MIME"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { success: false, error: 'File validation failed: File size exceeds 5MB limit.' } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        970,
+        180
+      ],
+      "id": "reject-size",
+      "name": "Reject - File Oversized"
+    }
+  ],
+  "connections": {
+    "01 - Receive CV": {
+      "main": [
+        [
+          {
+            "node": "02 - Validate File Exists",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "02 - Validate File Exists": {
+      "main": [
+        [
+          {
+            "node": "03 - Validate Extension",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reject - Missing File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "03 - Validate Extension": {
+      "main": [
+        [
+          {
+            "node": "04 - Validate MIME",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reject - Invalid Extension",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "04 - Validate MIME": {
+      "main": [
+        [
+          {
+            "node": "05 - Validate File Size",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reject - Invalid MIME",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "05 - Validate File Size": {
+      "main": [
+        [
+          {
+            "node": "06 - Parse CV File",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reject - File Oversized",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "06 - Parse CV File": {
+      "main": [
+        [
+          {
+            "node": "07 - Initialize State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "07 - Initialize State": {
+      "main": [
+        [
+          {
+            "node": "08 - LLM Extraction",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "08 - LLM Extraction": {
+      "main": [
+        [
+          {
+            "node": "09 - JSON Parsing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "09 - JSON Parsing": {
+      "main": [
+        [
+          {
+            "node": "10 - Schema Validation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "10 - Schema Validation": {
+      "main": [
+        [
+          {
+            "node": "11 - Check Validation Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "11 - Check Validation Success": {
+      "main": [
+        [
+          {
+            "node": "12 - Return candidate_profile.json",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "13 - Verify Retry Count",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "13 - Verify Retry Count": {
+      "main": [
+        [
+          {
+            "node": "14 - Prepare Repair Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "15 - Emit Validation Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "14 - Prepare Repair Prompt": {
+      "main": [
+        [
+          {
+            "node": "08 - LLM Extraction",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {},
+  "id": "m1-workflow"
+}

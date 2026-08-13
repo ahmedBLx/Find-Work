@@ -1,0 +1,229 @@
+{
+  "name": "Module 3 - Matching & Ranking",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        80,
+        300
+      ],
+      "id": "m3-trigger",
+      "name": "01 - Receive Inputs"
+    },
+    {
+      "parameters": {
+        "jsCode": "const candidate = $json.candidate_profile || {};\nconst jobs = $json.jobs || [];\n\nif (!candidate.candidate_id || !Array.isArray(jobs) || jobs.length === 0) {\n  throw new Error('Candidate Profile or Jobs array is missing/empty.');\n}\n\nreturn [{ json: { candidate, jobs } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        250,
+        300
+      ],
+      "id": "parse-inputs",
+      "name": "02 - Parse Input Features"
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $node[\"02 - Parse Input Features\"].json;\nconst candidate = data.candidate;\nconst jobs = data.jobs;\n\nconst synonyms = {\n  'js': ['javascript', 'js', 'typescript', 'ts'],\n  'javascript': ['javascript', 'js', 'typescript', 'ts'],\n  'typescript': ['javascript', 'js', 'typescript', 'ts'],\n  'ts': ['javascript', 'js', 'typescript', 'ts'],\n  'postgres': ['postgresql', 'postgres', 'sql'],\n  'postgresql': ['postgresql', 'postgres', 'sql'],\n  'sql': ['sql', 'postgresql', 'postgres', 'sqlite', 'mysql']\n};\n\nconst candSkills = [...(candidate.technical_skills || []), ...(candidate.programming_languages || []), ...(candidate.frameworks || []), ...(candidate.tools || [])].map(s => s.toLowerCase().trim());\n\nfunction checkSkillMatch(skill) {\n  const sLower = skill.toLowerCase().trim();\n  if (candSkills.includes(sLower)) return true;\n  for (const key in synonyms) {\n    if (synonyms[key].includes(sLower) && synonyms[key].some(syn => candSkills.includes(syn))) {\n      return true;\n    }\n  }\n  return false;\n}\n\nconst results = jobs.map(job => {\n  const matched = [];\n  const missing = [];\n  (job.required_skills || []).forEach(s => {\n    if (checkSkillMatch(s)) matched.push(s);\n    else missing.push(s);\n  });\n  \n  const score = job.required_skills.length > 0 ? (matched.length / job.required_skills.length) * 100 : 100;\n  \n  return {\n    job_id: job.job_id,\n    job: job,\n    matched_skills: matched,\n    missing_skills: missing,\n    keyword_score: score\n  };\n});\n\nreturn [{ json: { candidate, results } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        430,
+        300
+      ],
+      "id": "calc-skills",
+      "name": "03 - Calculate Skill Match"
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $node[\"03 - Calculate Skill Match\"].json;\nconst candidate = data.candidate;\nconst results = data.results;\n\nconst candTitles = [...(candidate.preferred_roles || []), ...(candidate.job_titles || [])].map(t => t.toLowerCase().trim());\nconst candKeywords = (candidate.keywords || []).map(k => k.toLowerCase().trim());\n\nconst updatedResults = results.map(item => {\n  const job = item.job;\n  \n  // Title similarity\n  let titleSim = 0.0;\n  const jobTitleLower = (job.job_title || '').toLowerCase();\n  const isTitleMatch = candTitles.some(title => jobTitleLower.includes(title));\n  if (isTitleMatch) titleSim = 1.0;\n  \n  // Keyword overlap\n  let kwSim = 0.0;\n  const jobDescLower = (job.description || '').toLowerCase();\n  if (candKeywords.length > 0) {\n    const matchedKw = candKeywords.filter(kw => jobDescLower.includes(kw));\n    kwSim = matchedKw.length / candKeywords.length;\n  } else {\n    kwSim = 1.0;\n  }\n  \n  const semanticSimilarity = (titleSim * 0.5) + (kwSim * 0.5);\n  const score = semanticSimilarity * 100;\n  \n  return {\n    ...item,\n    semantic_similarity: semanticSimilarity,\n    semantic_score: score\n  };\n});\n\nreturn [{ json: { candidate, results: updatedResults } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        610,
+        300
+      ],
+      "id": "calc-semantic",
+      "name": "04 - Calculate Semantic Match"
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $node[\"04 - Calculate Semantic Match\"].json;\nconst candidate = data.candidate;\nconst results = data.results;\n\nconst candExp = candidate.experience_years || 0;\n\nconst updatedResults = results.map(item => {\n  const job = item.job;\n  const reqExp = job.required_experience_years || 0;\n  const satisfied = candExp >= reqExp;\n  \n  const score = reqExp > 0 ? Math.min((candExp / reqExp) * 100, 100) : 100;\n  \n  return {\n    ...item,\n    experience_match: {\n      candidate_years: candExp,\n      required_years: reqExp,\n      satisfied: satisfied\n    },\n    experience_score: score\n  };\n});\n\nreturn [{ json: { candidate, results: updatedResults } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        790,
+        300
+      ],
+      "id": "calc-experience",
+      "name": "05 - Calculate Experience Match"
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $node[\"05 - Calculate Experience Match\"].json;\nconst results = data.results;\n\nconst finalJobs = results.map(item => {\n  const job = item.job;\n  \n  const wKeyword = 0.3;\n  const wSemantic = 0.4;\n  const wExperience = 0.3;\n  \n  const finalScore = parseFloat(((item.keyword_score * wKeyword) + (item.semantic_score * wSemantic) + (item.experience_score * wExperience)).toFixed(1));\n  \n  let decision = 'SKIP';\n  if (finalScore >= 85) decision = 'APPLY';\n  else if (finalScore >= 60) decision = 'REVIEW';\n  \n  const explanation = `Matched ${item.matched_skills.length} skills (missing ${item.missing_skills.length}). Experience req of ${item.experience_match.required_years} years is ${item.experience_match.satisfied ? 'satisfied' : 'not satisfied'} with candidate's ${item.experience_match.candidate_years} years. Role alignment scored ${Math.round(item.semantic_score)}%.`;\n  \n  return {\n    schema_version: job.schema_version || \"1.0\",\n    job_id: job.job_id,\n    job_title: job.job_title,\n    company: job.company,\n    location: job.location,\n    source: job.source,\n    description: job.description,\n    application_url: job.application_url,\n    required_skills: job.required_skills,\n    retrieved_at: job.retrieved_at,\n    employment_type: job.employment_type || \"Full-time\",\n    seniority_level: job.seniority_level || \"Mid\",\n    salary: job.salary || null,\n    education_requirement: job.education_requirement || null,\n    required_experience_years: job.required_experience_years || 0,\n    preferred_skills: job.preferred_skills || [],\n    technologies: job.technologies || [],\n    match_score: finalScore,\n    score_breakdown: {\n      keyword_score: parseFloat(item.keyword_score.toFixed(1)),\n      semantic_score: parseFloat(item.semantic_score.toFixed(1)),\n      experience_score: parseFloat(item.experience_score.toFixed(1)),\n      weights: {\n        keyword: wKeyword,\n        semantic: wSemantic,\n        experience: wExperience\n      }\n    },\n    matched_skills: item.matched_skills,\n    missing_skills: item.missing_skills,\n    experience_match: item.experience_match,\n    semantic_similarity: parseFloat(item.semantic_similarity.toFixed(2)),\n    decision: decision,\n    explanation: explanation,\n    method: \"hybrid\",\n    ranked_at: new Date().toISOString()\n  };\n});\n\nreturn [{ json: { ranked_jobs: finalJobs } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        970,
+        300
+      ],
+      "id": "generate-decisions",
+      "name": "06 - Generate Decisions & Explanations"
+    },
+    {
+      "parameters": {
+        "jsCode": "const jobs = $node[\"06 - Generate Decisions & Explanations\"].json.ranked_jobs;\n\njobs.sort((a, b) => {\n  if (b.match_score !== a.match_score) {\n    return b.match_score - a.match_score;\n  }\n  // Deterministic tie-breaker\n  return a.job_id.localeCompare(b.job_id);\n});\n\nreturn [{ json: { ranked_jobs: jobs } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1150,
+        300
+      ],
+      "id": "rank-jobs",
+      "name": "07 - Sort & Rank Jobs"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:3000/api/validate-contract",
+        "sendBody": true,
+        "contentType": "json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "schema_type",
+              "value": "ranked_jobs"
+            },
+            {
+              "name": "payload",
+              "value": "={{ $json.ranked_jobs }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1330,
+        300
+      ],
+      "id": "validate-contract",
+      "name": "08 - Validate Contract"
+    },
+    {
+      "parameters": {
+        "jsCode": "const check = $node[\"08 - Validate Contract\"].json;\nif (!check.valid) {\n  throw new Error('Contract schema violation on ranked_jobs: ' + JSON.stringify(check.errors));\n}\nreturn [{ json: { ranked_jobs: $node[\"07 - Sort & Rank Jobs\"].json.ranked_jobs } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1510,
+        300
+      ],
+      "id": "return-ranked",
+      "name": "09 - Return Final Ranked Jobs"
+    }
+  ],
+  "connections": {
+    "01 - Receive Inputs": {
+      "main": [
+        [
+          {
+            "node": "02 - Parse Input Features",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "02 - Parse Input Features": {
+      "main": [
+        [
+          {
+            "node": "03 - Calculate Skill Match",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "03 - Calculate Skill Match": {
+      "main": [
+        [
+          {
+            "node": "04 - Calculate Semantic Match",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "04 - Calculate Semantic Match": {
+      "main": [
+        [
+          {
+            "node": "05 - Calculate Experience Match",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "05 - Calculate Experience Match": {
+      "main": [
+        [
+          {
+            "node": "06 - Generate Decisions & Explanations",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "06 - Generate Decisions & Explanations": {
+      "main": [
+        [
+          {
+            "node": "07 - Sort & Rank Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "07 - Sort & Rank Jobs": {
+      "main": [
+        [
+          {
+            "node": "08 - Validate Contract",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "08 - Validate Contract": {
+      "main": [
+        [
+          {
+            "node": "09 - Return Final Ranked Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {},
+  "id": "m3-workflow"
+}

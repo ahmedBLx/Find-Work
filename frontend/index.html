@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Job Hunter Agent - Dashboard</title>
+  <!-- Outfit Font -->
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="logo">🎯</div>
+        <h2>Job Hunter Agent</h2>
+      </div>
+      <nav class="nav-menu">
+        <a href="#dashboard" class="nav-link active" onclick="showView('dashboard')">📊 Dashboard</a>
+        <a href="#pipeline" class="nav-link" onclick="showView('pipeline')">🚀 E2E Pipeline (M6)</a>
+        <a href="#cv-intelligence" class="nav-link" onclick="showView('cv-intelligence')">📄 CV Intelligence</a>
+        <a href="#job-discovery" class="nav-link" onclick="showView('job-discovery')">🔍 Job Discovery</a>
+        <a href="#matching-ranking" class="nav-link" onclick="showView('matching-ranking')">⚖️ Matching & Comparison</a>
+        <a href="#cv-tailoring" class="nav-link" onclick="showView('cv-tailoring')">✂️ Document Tailoring</a>
+        <a href="#approvals" class="nav-link" onclick="showView('approvals')">✅ Approvals Gate</a>
+        <a href="#tracking" class="nav-link" onclick="showView('tracking')">📈 Tracking & Logs</a>
+      </nav>
+      <div class="sidebar-footer">
+        <span class="status-badge online">● System Active</span>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+      <!-- DASHBOARD VIEW -->
+      <section id="view-dashboard" class="view-section active">
+        <header class="view-header">
+          <h1>System Overview Dashboard</h1>
+          <p>Real-time automation flow metrics and agent execution status</p>
+        </header>
+
+        <div class="metrics-grid">
+          <div class="metric-card">
+            <h3>Total Jobs Found</h3>
+            <div class="value" id="stat-total-jobs">0</div>
+          </div>
+          <div class="metric-card">
+            <h3>Retrieved Jobs</h3>
+            <div class="value" id="stat-retrieved-jobs">0</div>
+          </div>
+          <div class="metric-card">
+            <h3>APPLY Recommends</h3>
+            <div class="value green" id="stat-apply-count">0</div>
+          </div>
+          <div class="metric-card">
+            <h3>REVIEW Recommends</h3>
+            <div class="value yellow" id="stat-review-count">0</div>
+          </div>
+          <div class="metric-card">
+            <h3>REJECT Recommends</h3>
+            <div class="value red" id="stat-reject-count">0</div>
+          </div>
+          <div class="metric-card">
+            <h3>Submitted Apps</h3>
+            <div class="value" id="stat-submitted-count">0</div>
+          </div>
+          <div class="metric-card">
+            <h3>Failed Submissions</h3>
+            <div class="value red" id="stat-failed-count">0</div>
+          </div>
+          <div class="metric-card">
+            <h3>Pending Approvals</h3>
+            <div class="value yellow" id="stat-pending-count">0</div>
+          </div>
+          <div class="metric-card">
+            <h3>Duplicates Blocked</h3>
+            <div class="value" id="stat-duplicate-blocked">0</div>
+          </div>
+        </div>
+
+        <div class="dashboard-flow-card">
+          <h2>Orchestration Pipeline Status</h2>
+          <div class="flow-steps">
+            <div class="flow-step active">
+              <span class="step-num">1</span>
+              <span class="step-label">CV Upload</span>
+            </div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-step">
+              <span class="step-num">2</span>
+              <span class="step-label">Job Retrieval</span>
+            </div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-step">
+              <span class="step-num">3</span>
+              <span class="step-label">Score & Rank</span>
+            </div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-step">
+              <span class="step-num">4</span>
+              <span class="step-label">CV Tailoring</span>
+            </div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-step">
+              <span class="step-num">5</span>
+              <span class="step-label">Approval Gate</span>
+            </div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-step">
+              <span class="step-num">6</span>
+              <span class="step-label">Submission</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- M6 PIPELINE VIEW -->
+      <section id="view-pipeline" class="view-section">
+        <header class="view-header">
+          <h1>Module 6: E2E Pipeline Orchestration</h1>
+          <p>Full end-to-end Job Hunter pipeline — M1 → M2 → M3 → APPLY Filter → M4 → M5 via real n8n</p>
+        </header>
+
+        <!-- n8n Status Banner -->
+        <div class="panel" id="n8n-status-banner">
+          <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
+            <div>
+              <h2 style="margin:0 0 4px;">n8n Orchestration Engine</h2>
+              <p style="margin:0; opacity:0.7;">Real n8n must be running to execute the complete pipeline</p>
+            </div>
+            <div style="display:flex; align-items:center; gap:16px;">
+              <span id="n8n-status-badge" class="status-badge" style="font-size:1rem; padding:8px 18px;">● Checking...</span>
+              <button class="btn btn-secondary" onclick="checkN8nStatus()">Refresh Status</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- N8N Offline Instructions -->
+        <div id="n8n-offline-panel" class="panel hidden" style="border:2px solid #ef4444; background:rgba(239,68,68,0.08);">
+          <h2 style="color:#ef4444;">⚠️ N8N IS OFFLINE</h2>
+          <p>The complete E2E pipeline cannot run without the real n8n engine. Follow these steps to get n8n running:</p>
+          <ol id="n8n-setup-steps" style="line-height:2;">
+            <li>Install n8n globally: <code>npm install -g n8n</code></li>
+            <li>Start n8n: <code>npx n8n start</code></li>
+            <li>Open n8n at: <a href="http://localhost:5678" target="_blank">http://localhost:5678</a></li>
+            <li>Import <strong>workflows/Complete_Job_Hunter.json</strong> into n8n (Menu → Import Workflow)</li>
+            <li>Activate the workflow (click the toggle switch to <strong>Active</strong>)</li>
+            <li>Verify the webhook is active at: <code>http://localhost:5678/webhook/job-hunter-pipeline</code></li>
+            <li>Click <strong>Refresh Status</strong> above — confirm <strong>● n8n Online</strong></li>
+            <li>Return here and run the pipeline</li>
+          </ol>
+        </div>
+
+        <!-- Pipeline Control -->
+        <div class="panel margin-top">
+          <h2>Pipeline Control</h2>
+          <p>The pipeline will use the currently loaded candidate profile and jobs from the Job Discovery module.</p>
+          <div class="form-row" style="margin-top:12px;">
+            <button class="btn btn-primary" id="btn-run-pipeline" onclick="runE2EPipeline()" style="font-size:1rem; padding:12px 28px;">🚀 Start Job Hunter Pipeline</button>
+            <button class="btn btn-secondary" onclick="showView('cv-intelligence')">Upload CV first →</button>
+            <button class="btn btn-secondary" onclick="showView('job-discovery')">Discover Jobs first →</button>
+          </div>
+          <div id="pipeline-run-status" class="status-indicator margin-top hidden"></div>
+        </div>
+
+        <!-- Pipeline Progress -->
+        <div class="panel margin-top" id="pipeline-progress-panel" style="display:none;">
+          <h2>Pipeline Execution Progress</h2>
+          <div class="flow-steps" id="pipeline-flow-steps" style="flex-wrap:wrap; gap:8px;">
+            <div class="flow-step" id="ps-m1"><span class="step-num">1</span><span class="step-label">M1 Candidate</span></div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-step" id="ps-m2"><span class="step-num">2</span><span class="step-label">M2 Jobs</span></div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-step" id="ps-m3"><span class="step-num">3</span><span class="step-label">M3 Ranking</span></div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-step" id="ps-filter"><span class="step-num">4</span><span class="step-label">APPLY Filter</span></div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-step" id="ps-m4"><span class="step-num">5</span><span class="step-label">M4 Tailoring</span></div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-step" id="ps-m5"><span class="step-num">6</span><span class="step-label">M5 Tracking</span></div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-step" id="ps-final"><span class="step-num">✓</span><span class="step-label">Done</span></div>
+          </div>
+        </div>
+
+        <!-- Pipeline Results -->
+        <div class="panel margin-top" id="pipeline-results-panel" style="display:none;">
+          <h2>Pipeline Results</h2>
+          <div id="pipeline-results-content"></div>
+        </div>
+      </section>
+
+      <!-- CV INTELLIGENCE VIEW -->
+      <section id="view-cv-intelligence" class="view-section">
+        <header class="view-header">
+          <h1>Module 1: CV Intelligence</h1>
+          <p>Extract, parse, validate, and convert resumes into structured JSON models</p>
+        </header>
+
+        <div class="two-column-grid">
+          <div class="panel">
+            <h2>1. Intake & Text Extraction</h2>
+            <div class="upload-area" id="cv-upload-area">
+              <p>Drag & Drop CV here or click to select</p>
+              <input type="file" id="cv-file-input" style="display: none;" accept=".pdf,.docx,.txt">
+              <span class="file-info" id="uploaded-file-info">No file selected</span>
+            </div>
+            <div id="cv-error-box" class="error-box hidden"></div>
+            
+            <div class="form-group margin-top">
+              <button class="btn btn-primary" id="btn-parse-cv" onclick="uploadAndParseCV()">Upload & Parse File</button>
+            </div>
+            
+            <div class="margin-top">
+              <h3>Extracted Clean Text Preview:</h3>
+              <textarea id="cv-clean-text-preview" class="text-preview" readonly placeholder="Parsed CV content will appear here..."></textarea>
+            </div>
+          </div>
+
+          <div class="panel">
+            <h2>2. Extracted Candidate Profile JSON</h2>
+            <div id="cv-extraction-status" class="status-indicator margin-bottom">Status: Waiting for input</div>
+            <textarea id="cv-profile-json-preview" class="json-preview" placeholder="candidate_profile.json output schema..."></textarea>
+            <div class="form-group margin-top">
+              <button class="btn btn-secondary" onclick="saveExtractedProfile()">Save Profile Draft</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- JOB DISCOVERY VIEW -->
+      <section id="view-job-discovery" class="view-section">
+        <header class="view-header">
+          <h1>Module 2: Job Discovery</h1>
+          <p>Retrieve search queries across multiple independent sources and clean the dataset</p>
+        </header>
+
+        <div class="panel">
+          <h2>1. Search Configuration & Feeds</h2>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Search terms (Keywords):</label>
+              <input type="text" id="job-search-terms" value="Backend Engineer, Node.js Developer">
+            </div>
+            <div class="form-group">
+              <label>Location:</label>
+              <input type="text" id="job-search-location" value="New York, NY">
+            </div>
+            <div class="form-group">
+              <label>Limit per source:</label>
+              <input type="number" id="job-search-limit" value="10">
+            </div>
+            <div class="form-group align-end">
+              <button class="btn btn-primary" onclick="triggerJobDiscovery()">Run Job Search</button>
+            </div>
+          </div>
+          
+          <div class="source-metrics margin-top">
+            <div class="source-card">
+              <h4>Source A (GlobalJobs API)</h4>
+              <p id="source-a-status">Status: Idle</p>
+              <span class="count" id="source-a-count">0</span>
+            </div>
+            <div class="source-card">
+              <h4>Source B (TechCareers API)</h4>
+              <p id="source-b-status">Status: Idle</p>
+              <span class="count" id="source-b-count">0</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel margin-top">
+          <h2>2. Normalised & De-duplicated Jobs</h2>
+          <div class="table-container">
+            <table class="data-table" id="jobs-table">
+              <thead>
+                <tr>
+                  <th>Job ID</th>
+                  <th>Title</th>
+                  <th>Company</th>
+                  <th>Location</th>
+                  <th>Source</th>
+                  <th>Skills Required</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td colspan="7" class="text-center">No jobs retrieved yet. Use the controls above to trigger retrieval.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- MATCHING & RANKING VIEW -->
+      <section id="view-matching-ranking" class="view-section">
+        <header class="view-header">
+          <h1>Module 3: Matching & Recommendation</h1>
+          <p>Apply matching logic to calculate match scores and explain recommendations</p>
+        </header>
+
+        <div class="panel">
+          <h2>1. Scorer Method Settings</h2>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Scoring Method:</label>
+              <select id="match-scoring-method" onchange="recalculateMatchScores()">
+                <option value="hybrid">Hybrid (Recommended)</option>
+                <option value="keyword">Keyword Overlap</option>
+                <option value="semantic">Semantic Similarity</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel margin-top">
+          <h2>2. Ranked Vacancies Comparison</h2>
+          <div class="table-container">
+            <table class="data-table" id="ranked-jobs-table">
+              <thead>
+                <tr>
+                  <th>Rank</th>
+                  <th>Company</th>
+                  <th>Job Title</th>
+                  <th>Score</th>
+                  <th>Decision</th>
+                  <th>Matched Skills</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td colspan="7" class="text-center">No ranked jobs available. Please retrieve jobs first.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Matching Explanation Modal / Panel -->
+        <div id="matching-details-panel" class="panel margin-top hidden">
+          <h2>Match Justification Breakdown</h2>
+          <div class="explanation-grid">
+            <div class="info-group">
+              <h4>Decision Recommendation</h4>
+              <div id="match-detail-decision" class="decision-badge apply">APPLY</div>
+            </div>
+            <div class="info-group">
+              <h4>Match Score</h4>
+              <div class="large-text" id="match-detail-score">0.0%</div>
+            </div>
+            <div class="info-group col-span-2">
+              <h4>Reasoning Explanation</h4>
+              <p id="match-detail-explanation"></p>
+            </div>
+            <div class="info-group">
+              <h4>Skills Match</h4>
+              <div id="match-detail-skills"></div>
+            </div>
+            <div class="info-group">
+              <h4>Missing Skills</h4>
+              <div id="match-detail-missing"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- DOCUMENT TAILORING VIEW -->
+      <section id="view-cv-tailoring" class="view-section">
+        <header class="view-header">
+          <h1>Module 4: Document Tailoring</h1>
+          <p>Generate optimized CV and Cover Letter tailored to the vacancy and check for factual consistency</p>
+        </header>
+
+        <div class="two-column-grid">
+          <div class="panel">
+            <h2>1. Selected Target Vacancy</h2>
+            <div class="job-card" id="tailoring-job-card">
+              <h3>No job selected</h3>
+              <p>Select a job from the Matching page to begin document generation.</p>
+            </div>
+            
+            <div class="margin-top">
+              <button class="btn btn-primary" id="btn-tailor-docs" onclick="triggerTailoring()">Tailor Application Package</button>
+            </div>
+
+            <div class="status-panel margin-top">
+              <h3>Tailoring & Verification Logs</h3>
+              <div class="log-entry" id="log-tailor-status">Waiting...</div>
+              <div class="log-entry" id="log-fact-check">Factual Consistency Verifier: Idle</div>
+              <div class="log-entry" id="log-latex-status">LaTeX Engine status: Idle</div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <h2>2. Tailored Output Deliverables</h2>
+            <div class="tab-header">
+              <button class="tab-btn active" onclick="switchTailoringTab('tailored-cv')">Tailored Resume</button>
+              <button class="tab-btn" onclick="switchTailoringTab('cover-letter')">Cover Letter</button>
+            </div>
+            <div id="tab-content-tailored-cv" class="tab-content">
+              <textarea id="tailored-cv-preview" class="text-preview" readonly placeholder="Tailored .tex resume content..."></textarea>
+            </div>
+            <div id="tab-content-cover-letter" class="tab-content hidden">
+              <textarea id="cover-letter-preview" class="text-preview" readonly placeholder="Custom cover letter content..."></textarea>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- APPROVALS GATE VIEW -->
+      <section id="view-approvals" class="view-section">
+        <header class="view-header">
+          <h1>Module 5: Human Approvals Gate</h1>
+          <p>Enforce manual validation before submitting packages to target companies</p>
+        </header>
+
+        <div class="panel text-center max-width-center" id="no-approvals-panel">
+          <h2>No applications pending approval</h2>
+          <p>Generate tailored documents on the Tailoring page to push applications into the queue.</p>
+        </div>
+
+        <div class="panel max-width-center hidden" id="approval-card">
+          <div class="approval-header">
+            <h2 id="approval-job-title">Backend Developer</h2>
+            <h3 id="approval-company">Tech Solutions</h3>
+            <span class="badge yellow" id="approval-score">Match Score: 92%</span>
+          </div>
+
+          <div class="approval-body margin-top">
+            <div class="two-column-grid">
+              <div>
+                <h4>Resume:</h4>
+                <a id="approval-resume-link" href="#" target="_blank" class="download-link">📄 Open Tailored PDF</a>
+              </div>
+              <div>
+                <h4>Cover Letter:</h4>
+                <a id="approval-letter-link" href="#" target="_blank" class="download-link">📄 Open Cover Letter</a>
+              </div>
+            </div>
+            
+            <div class="countdown-timer margin-top">
+              <span>Approval Timeout remaining: </span>
+              <strong id="approval-timer">00:00</strong>
+            </div>
+          </div>
+
+          <div class="approval-actions margin-top">
+            <button class="btn btn-success large" onclick="submitApproval('APPROVED')">APPROVE APPLICATION</button>
+            <button class="btn btn-danger large" onclick="submitApproval('REJECTED')">REJECT / CANCEL</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- TRACKING VIEW -->
+      <section id="view-tracking" class="view-section">
+        <header class="view-header">
+          <h1>Module 5: Application Tracking & Audit logs</h1>
+          <p>Verify application pipelines, historical retry schedules, and execution errors</p>
+        </header>
+
+        <div class="panel">
+          <h2>Application Pipeline Logs</h2>
+          <div class="table-container">
+            <table class="data-table" id="tracking-table">
+              <thead>
+                <tr>
+                  <th>App ID</th>
+                  <th>Job Title</th>
+                  <th>Company</th>
+                  <th>Submission</th>
+                  <th>Attempts</th>
+                  <th>Status</th>
+                  <th>Error Stage</th>
+                  <th>Submitted At</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td colspan="9" class="text-center">No applications tracked.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Timeline Audit Details -->
+        <div id="timeline-details-panel" class="panel margin-top hidden">
+          <h2>Application Lifecycle Timeline</h2>
+          <div id="timeline-flow" class="timeline-container">
+            <!-- Dynamically populated timeline elements -->
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
