@@ -134,9 +134,9 @@ module.exports = {
         app.submitted_at,
         app.attempts,
         app.confirmation_sent ? 1 : 0,
-        app.error ? app.error.code : null,
-        app.error ? app.error.message : null,
-        app.error ? app.error.stage : null,
+        app.error ? app.error.code : (app.error_code || null),
+        app.error ? app.error.message : (app.error_message || null),
+        app.error ? app.error.stage : (app.error_stage || null),
         app.application_id
       ]);
     } else {
@@ -159,9 +159,9 @@ module.exports = {
         app.submitted_at,
         app.attempts || 0,
         app.confirmation_sent ? 1 : 0,
-        app.error ? app.error.code : null,
-        app.error ? app.error.message : null,
-        app.error ? app.error.stage : null,
+        app.error ? app.error.code : (app.error_code || null),
+        app.error ? app.error.message : (app.error_message || null),
+        app.error ? app.error.stage : (app.error_stage || null),
         now
       ]);
     }

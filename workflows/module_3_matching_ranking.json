@@ -2,6 +2,22 @@
   "name": "Module 3 - Matching & Ranking",
   "nodes": [
     {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "m3-matching-ranking",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        80,
+        150
+      ],
+      "id": "m3-webhook-trigger",
+      "name": "m3-rank-webhook"
+    },
+    {
       "parameters": {},
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
@@ -14,7 +30,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const candidate = $json.candidate_profile || {};\nconst jobs = $json.jobs || [];\n\nif (!candidate.candidate_id || !Array.isArray(jobs) || jobs.length === 0) {\n  throw new Error('Candidate Profile or Jobs array is missing/empty.');\n}\n\nreturn [{ json: { candidate, jobs } }];"
+        "jsCode": "const input = $json.body || $json;\nconst candidate = input.candidate_profile || input.candidate || {};\nconst jobs = input.jobs || [];\n\nif (!candidate.candidate_id || !Array.isArray(jobs) || jobs.length === 0) {\n  throw new Error('Candidate Profile or Jobs array is missing/empty.');\n}\n\nreturn [{ json: { candidate, jobs } }];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -216,6 +232,17 @@
         [
           {
             "node": "09 - Return Final Ranked Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "m3-rank-webhook": {
+      "main": [
+        [
+          {
+            "node": "02 - Parse Input Features",
             "type": "main",
             "index": 0
           }

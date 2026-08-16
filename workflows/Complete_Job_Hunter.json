@@ -10,9 +10,12 @@
       },
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
-      "position": [50, 300],
+      "position": [
+        50,
+        300
+      ],
       "id": "e2e-webhook-trigger",
-      "name": "01 - Webhook Trigger (Pipeline Start)"
+      "name": "job-hunter-pipeline-trigger"
     },
     {
       "parameters": {
@@ -20,7 +23,10 @@
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [250, 300],
+      "position": [
+        250,
+        300
+      ],
       "id": "validate-inputs",
       "name": "02 - Validate Contract Inputs (3.1 + 3.2)"
     },
@@ -30,7 +36,10 @@
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [500, 300],
+      "position": [
+        500,
+        300
+      ],
       "id": "m3-matching-ranking",
       "name": "03 - M3: Matching & Ranking (Contract 3.3)"
     },
@@ -40,25 +49,32 @@
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [750, 300],
+      "position": [
+        750,
+        300
+      ],
       "id": "apply-filter",
       "name": "04 - APPLY Filter (decision == APPLY only)"
     },
     {
       "parameters": {
-        "jsCode": "// ============================================================\n// MODULE 4 — CV TAILORING & DOCUMENTS\n// Input: candidate_profile + target_job (from APPLY filter)\n// Output: application_package (Contract 3.4)\n// ============================================================\nconst data = $json;\nconst candidate = data.candidate_profile;\nconst job = data.target_job;\n\nif (!candidate || !job) {\n  throw new Error('CONTRACT VIOLATION: Missing candidate_profile or target_job for M4');\n}\n\n// Validate we only process APPLY jobs\nif (job.decision !== 'APPLY') {\n  throw new Error(`M4 FILTER VIOLATION: Received job with decision=${job.decision}. Only APPLY jobs allowed.`);\n}\n\n// Generate tailored LaTeX CV\nconst tailoredLatex = `\\\\documentclass[11pt]{article}\n\\\\usepackage[margin=1in]{geometry}\n\\\\usepackage{hyperref}\n\\\\begin{document}\n\n\\\\begin{center}\n{\\\\Large \\\\textbf{${candidate.candidate_name}}}\\\\\\\\\n${candidate.email} \\\\cdot ${candidate.phone || ''} \\\\cdot ${candidate.location || ''}\n\\\\end{center}\n\n\\\\section*{Professional Summary}\nExperienced ${candidate.preferred_roles ? candidate.preferred_roles[0] : 'Software Engineer'} with ${candidate.experience_years} years of experience. Highly skilled in ${(candidate.technical_skills || []).slice(0, 4).join(', ')} tailored for the ${job.job_title} role at ${job.company}.\n\n\\\\section*{Technical Skills}\n\\\\begin{itemize}\n${(candidate.technical_skills || []).map(s => `\\\\item ${s}`).join('\\n')}\n\\\\end{itemize}\n\n\\\\section*{Programming Languages}\n${(candidate.programming_languages || []).join(', ')}\n\n\\\\section*{Experience}\n${candidate.experience_years} years of professional software development experience.\n\n\\\\section*{Education}\n${(candidate.education || []).map(e => `${e.degree} in ${e.field}, ${e.institution} (${e.year})`).join(', ')}\n\n\\\\section*{Matched Skills for ${job.job_title}}\nMatched: ${job.matched_skills.join(', ')}\n\n\\\\end{document}`;\n\n// Generate cover letter\nconst coverLetter = `Dear Hiring Manager at ${job.company},\n\nI am writing to express my strong interest in the ${job.job_title} position (Match Score: ${job.match_score}%). With ${candidate.experience_years} years of professional experience, I bring a strong background in ${(candidate.technical_skills || []).slice(0, 3).join(', ')}.\n\nYour job listing highlights the need for expertise in ${job.matched_skills.join(', ')}, which aligns directly with my background.\n\n${candidate.projects && candidate.projects.length > 0 ? `In my previous role, I ${candidate.projects[0].description}` : 'I have delivered impactful software solutions across various projects.'}\n\nI am particularly excited about this opportunity at ${job.company} and confident I can contribute meaningfully from day one.\n\nThank you for your consideration.\n\nBest regards,\n${candidate.candidate_name}`;\n\n// Build Contract 3.4 application_package\nconst application_package = {\n  candidate_id: candidate.candidate_id,\n  candidate_email: candidate.email,\n  job_id: job.job_id,\n  job_title: job.job_title,\n  company: job.company,\n  application_url: job.application_url,\n  match_score: job.match_score,\n  cv_file: `outputs/${candidate.candidate_id}_${job.job_id}_tailored.pdf`,\n  cv_tex_file: `outputs/${candidate.candidate_id}_${job.job_id}_tailored.tex`,\n  cover_letter_file: `outputs/${candidate.candidate_id}_${job.job_id}_cover_letter.txt`,\n  cv_tex_raw: tailoredLatex,\n  cover_letter_text: coverLetter,\n  tailoring_meta: {\n    model: 'n8n-code-node',\n    prompt_version: '1.0',\n    generated_at: new Date().toISOString()\n  },\n  fact_check: {\n    unsupported_claims: [],\n    passed: true\n  },\n  latex_compiled: false\n};\n\nconsole.log(`[M6 M4] Generated application package for job ${job.job_id} at ${job.company}`);\n\nreturn [{ json: {\n  candidate_profile: candidate,\n  target_job: job,\n  application_package,\n  ranked_jobs: data.ranked_jobs,\n  skipped_jobs: data.skipped_jobs\n} }];"
+        "jsCode": "// ============================================================\n// MODULE 4 — CV TAILORING & DOCUMENTS\n// Input: items from APPLY filter\n// Output: application_package (Contract 3.4) per item\n// ============================================================\nconst items = $input.all();\nreturn items.map(item => {\n  const data = item.json;\n  const candidate = data.candidate_profile;\n  const job = data.target_job;\n\n  if (!candidate || !job) {\n    throw new Error('CONTRACT VIOLATION: Missing candidate_profile or target_job for M4');\n  }\n\n  const tailoredLatex = `\\\\documentclass[11pt]{article}\n\\\\usepackage[margin=1in]{geometry}\n\\\\usepackage{hyperref}\n\\\\begin{document}\n\n\\\\begin{center}\n{\\\\Large \\\\textbf{${candidate.candidate_name}}}\\\\\\\\\n${candidate.email} \\\\cdot ${candidate.phone || ''} \\\\cdot ${candidate.location || ''}\n\\\\end{center}\n\n\\\\section*{Professional Summary}\nExperienced ${candidate.preferred_roles ? candidate.preferred_roles[0] : 'Software Engineer'} with ${candidate.experience_years} years of experience. Highly skilled in ${(candidate.technical_skills || []).slice(0, 4).join(', ')} tailored for the ${job.job_title} role at ${job.company}.\n\n\\\\section*{Technical Skills}\n\\\\begin{itemize}\n${(candidate.technical_skills || []).map(s => `\\\\item ${s}`).join('\\n')}\n\\\\end{itemize}\n\n\\\\section*{Programming Languages}\n${(candidate.programming_languages || []).join(', ')}\n\n\\\\section*{Experience}\n${candidate.experience_years} years of professional software development experience.\n\n\\\\section*{Education}\n${(candidate.education || []).map(e => `${e.degree} in ${e.field}, ${e.institution} (${e.year})`).join(', ')}\n\n\\\\section*{Matched Skills for ${job.job_title}}\nMatched: ${job.matched_skills.join(', ')}\n\n\\\\end{document}`;\n\n  const coverLetter = `Dear Hiring Manager at ${job.company},\n\nI am writing to express my strong interest in the ${job.job_title} position (Match Score: ${job.match_score}%). With ${candidate.experience_years} years of professional experience, I bring a strong background in ${(candidate.technical_skills || []).slice(0, 3).join(', ')}.\n\nYour job listing highlights the need for expertise in ${job.matched_skills.join(', ')}, which aligns directly with my background.\n\nThank you for your consideration.\n\nBest regards,\n${candidate.candidate_name}`;\n\n  const application_package = {\n    candidate_id: candidate.candidate_id,\n    candidate_email: candidate.email,\n    job_id: job.job_id,\n    job_title: job.job_title,\n    company: job.company,\n    application_url: job.application_url,\n    match_score: job.match_score,\n    cv_file: `outputs/${candidate.candidate_id}_${job.job_id}_tailored.pdf`,\n    cv_tex_file: `outputs/${candidate.candidate_id}_${job.job_id}_tailored.tex`,\n    cover_letter_file: `outputs/${candidate.candidate_id}_${job.job_id}_cover_letter.txt`,\n    cv_tex_raw: tailoredLatex,\n    cover_letter_text: coverLetter,\n    tailoring_meta: {\n      model: 'n8n-code-node',\n      prompt_version: '1.0',\n      generated_at: new Date().toISOString()\n    },\n    fact_check: {\n      unsupported_claims: [],\n      passed: true\n    },\n    latex_compiled: false\n  };\n\n  return {\n    json: {\n      candidate_profile: candidate,\n      target_job: job,\n      application_package,\n      ranked_jobs: data.ranked_jobs,\n      skipped_jobs: data.skipped_jobs\n    }\n  };\n});"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1000, 300],
+      "position": [
+        1000,
+        300
+      ],
       "id": "m4-cv-tailoring",
       "name": "05 - M4: CV Tailoring & Documents (Contract 3.4)"
     },
     {
       "parameters": {
-        "url": "=http://localhost:3000/api/documents/assemble",
+        "method": "POST",
+        "url": "http://localhost:3000/api/documents/assemble",
         "sendBody": true,
-        "bodyContentType": "json",
+        "contentType": "json",
         "bodyParameters": {
           "parameters": [
             {
@@ -83,35 +99,45 @@
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [1200, 200],
+      "position": [
+        1200,
+        200
+      ],
       "id": "m4-document-assemble",
       "name": "06 - M4: Compile Documents (PDF via Express)"
     },
     {
       "parameters": {
-        "jsCode": "// Merge compile result back into application_package\nconst prev = $('05 - M4: CV Tailoring & Documents (Contract 3.4)').item.json;\nconst compileResult = $json;\n\nconst application_package = { ...prev.application_package };\n\nif (compileResult.success) {\n  application_package.cv_file = compileResult.cv_file;\n  application_package.cv_tex_file = compileResult.cv_tex_file;\n  application_package.cover_letter_file = compileResult.cover_letter_file;\n  application_package.latex_compiled = compileResult.latex_compiled;\n} else {\n  // Keep original paths but mark not compiled\n  application_package.latex_compiled = false;\n  application_package.compile_warning = compileResult.message || 'Document assembly call failed';\n}\n\nconsole.log(`[M6 M4→M5] Application package assembled. PDF: ${application_package.cv_file}, latex_compiled: ${application_package.latex_compiled}`);\n\nreturn [{ json: {\n  candidate_profile: prev.candidate_profile,\n  target_job: prev.target_job,\n  application_package,\n  ranked_jobs: prev.ranked_jobs,\n  skipped_jobs: prev.skipped_jobs\n} }];"
+        "jsCode": "// Merge compile result back into application_package\nconst items = $input.all();\nconst allPrev = $('05 - M4: CV Tailoring & Documents (Contract 3.4)').all();\n\nreturn items.map((item, idx) => {\n  const compileResult = item.json;\n  const prev = (allPrev && allPrev[idx]) ? allPrev[idx].json : allPrev[0].json;\n  const application_package = { ...prev.application_package };\n\n  if (compileResult.success) {\n    application_package.cv_file = compileResult.cv_file;\n    application_package.cv_tex_file = compileResult.cv_tex_file;\n    application_package.cover_letter_file = compileResult.cover_letter_file;\n    application_package.latex_compiled = compileResult.latex_compiled;\n  } else {\n    application_package.latex_compiled = false;\n    application_package.compile_warning = compileResult.message || 'Document assembly call failed';\n  }\n\n  return {\n    json: {\n      candidate_profile: prev.candidate_profile,\n      target_job: prev.target_job,\n      application_package,\n      ranked_jobs: prev.ranked_jobs,\n      skipped_jobs: prev.skipped_jobs\n    }\n  };\n});"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1400, 300],
+      "position": [
+        1400,
+        300
+      ],
       "id": "merge-package",
       "name": "07 - Merge Compiled Package (M4 → M5 Boundary)"
     },
     {
       "parameters": {
-        "jsCode": "// ============================================================\n// MODULE 5 — APPLICATION & TRACKING\n// Input: application_package (Contract 3.4)\n// Output: application_status (Contract 3.5) → SQLite\n// ============================================================\nconst data = $json;\nconst pkg = data.application_package;\nconst candidate = data.candidate_profile;\n\n// Contract 3.4 validation before M5 processing\nconst required34 = ['candidate_id', 'candidate_email', 'job_id', 'job_title', 'company', 'application_url', 'match_score', 'cv_file', 'cv_tex_file', 'cover_letter_file', 'tailoring_meta', 'fact_check', 'latex_compiled'];\nconst missing34 = required34.filter(f => pkg[f] === undefined || pkg[f] === null);\nif (missing34.length > 0) {\n  throw new Error(`CONTRACT VIOLATION 3.4: application_package missing fields: ${missing34.join(', ')}`);\n}\n\nconsole.log(`[M6 M5] Processing application for job ${pkg.job_id} at ${pkg.company}`);\n\n// Build M5 submission payload\nconst m5_payload = {\n  candidate_id: pkg.candidate_id,\n  job_id: pkg.job_id,\n  company: pkg.company,\n  job_title: pkg.job_title,\n  cv_file: pkg.cv_file,\n  cover_letter_file: pkg.cover_letter_file\n};\n\nreturn [{ json: {\n  candidate_profile: candidate,\n  application_package: pkg,\n  m5_payload,\n  target_job: data.target_job,\n  ranked_jobs: data.ranked_jobs,\n  skipped_jobs: data.skipped_jobs\n} }];"
+        "jsCode": "// ============================================================\n// MODULE 5 — APPLICATION & TRACKING\n// Input: application_package (Contract 3.4)\n// Output: application_status (Contract 3.5) → SQLite\n// ============================================================\nconst items = $input.all();\nreturn items.map(item => {\n  const data = item.json;\n  const pkg = data.application_package;\n  const candidate = data.candidate_profile;\n\n  const m5_payload = {\n    candidate_id: pkg.candidate_id,\n    job_id: pkg.job_id,\n    company: pkg.company,\n    job_title: pkg.job_title,\n    cv_file: pkg.cv_file,\n    cover_letter_file: pkg.cover_letter_file\n  };\n\n  return {\n    json: {\n      candidate_profile: candidate,\n      application_package: pkg,\n      m5_payload,\n      target_job: data.target_job,\n      ranked_jobs: data.ranked_jobs,\n      skipped_jobs: data.skipped_jobs\n    }\n  };\n});"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1600, 300],
+      "position": [
+        1600,
+        300
+      ],
       "id": "m5-prepare",
       "name": "08 - M5: Validate Contract 3.4 & Prepare Submission"
     },
     {
       "parameters": {
-        "url": "=http://localhost:3000/api/applications/submit",
+        "method": "POST",
+        "url": "http://localhost:3000/api/applications/submit",
         "sendBody": true,
-        "bodyContentType": "json",
+        "contentType": "json",
         "bodyParameters": {
           "parameters": [
             {
@@ -144,75 +170,175 @@
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [1800, 200],
+      "position": [
+        1800,
+        200
+      ],
       "id": "m5-submit",
       "name": "09 - M5: Submit to Application Tracking (Express)"
     },
     {
       "parameters": {
-        "jsCode": "// Build final Contract 3.5 application_status\nconst prev = $('08 - M5: Validate Contract 3.4 & Prepare Submission').item.json;\nconst submitResult = $json;\n\nlet application_status;\n\nif (submitResult.success && submitResult.application) {\n  const app = submitResult.application;\n  application_status = {\n    application_id: app.application_id,\n    candidate_id: app.candidate_id,\n    job_id: app.job_id,\n    company: app.company,\n    job_title: app.job_title,\n    approval_decision: app.approval_decision,\n    application_status: app.application_status,\n    submission_method: app.submission_method || 'mock',\n    attempts: app.attempts || 0,\n    confirmation_sent: app.confirmation_sent || false,\n    submitted_at: app.submitted_at || null,\n    error: app.error || null\n  };\n} else {\n  application_status = {\n    application_id: 'app_err_' + Math.random().toString(36).substr(2, 8),\n    candidate_id: prev.m5_payload.candidate_id,\n    job_id: prev.m5_payload.job_id,\n    company: prev.m5_payload.company,\n    job_title: prev.m5_payload.job_title,\n    approval_decision: 'ERROR',\n    application_status: 'failed',\n    submission_method: 'mock',\n    attempts: 0,\n    confirmation_sent: false,\n    submitted_at: null,\n    error: { code: 'M5_SUBMIT_FAILED', message: submitResult.message || 'M5 submission endpoint returned failure', stage: 'intake' }\n  };\n}\n\nconsole.log(`[M6 M5→DB] Application ${application_status.application_id} status: ${application_status.application_status}`);\n\nreturn [{ json: {\n  candidate_profile: prev.candidate_profile,\n  application_status,\n  application_package: prev.application_package,\n  target_job: prev.target_job,\n  ranked_jobs: prev.ranked_jobs,\n  skipped_jobs: prev.skipped_jobs\n} }];"
+        "jsCode": "// Build final Contract 3.5 application_status\nconst items = $input.all();\nconst allPrev = $('08 - M5: Validate Contract 3.4 & Prepare Submission').all();\n\nreturn items.map((item, idx) => {\n  const submitResult = item.json;\n  const prev = (allPrev && allPrev[idx]) ? allPrev[idx].json : allPrev[0].json;\n  let application_status;\n\n  if (submitResult.success && submitResult.application) {\n    const app = submitResult.application;\n    application_status = {\n      application_id: app.application_id,\n      candidate_id: app.candidate_id,\n      job_id: app.job_id,\n      company: app.company,\n      job_title: app.job_title,\n      approval_decision: app.approval_decision,\n      application_status: app.application_status,\n      submission_method: app.submission_method || 'mock',\n      attempts: app.attempts || 0,\n      confirmation_sent: app.confirmation_sent || false,\n      submitted_at: app.submitted_at || null,\n      error: app.error || null\n    };\n  } else {\n    application_status = {\n      application_id: 'app_err_' + Math.random().toString(36).substr(2, 8),\n      candidate_id: prev.m5_payload.candidate_id,\n      job_id: prev.m5_payload.job_id,\n      company: prev.m5_payload.company,\n      job_title: prev.m5_payload.job_title,\n      approval_decision: 'ERROR',\n      application_status: 'failed',\n      submission_method: 'mock',\n      attempts: 0,\n      confirmation_sent: false,\n      submitted_at: null,\n      error: { code: 'M5_SUBMIT_FAILED', message: submitResult.message || 'M5 submission endpoint returned failure', stage: 'intake' }\n    };\n  }\n\n  return {\n    json: {\n      candidate_profile: prev.candidate_profile,\n      application_status,\n      application_package: prev.application_package,\n      target_job: prev.target_job,\n      ranked_jobs: prev.ranked_jobs,\n      skipped_jobs: prev.skipped_jobs\n    }\n  };\n});"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2000, 300],
+      "position": [
+        2000,
+        300
+      ],
       "id": "m5-build-status",
       "name": "10 - M5: Build Contract 3.5 (application_status)"
     },
     {
       "parameters": {
-        "jsCode": "// Final pipeline summary\nconst data = $json;\nconst status = data.application_status;\nconst ranked = data.ranked_jobs || [];\nconst skipped = data.skipped_jobs || [];\n\nconst summary = {\n  pipeline: 'Complete Job Hunter - E2E',\n  completed_at: new Date().toISOString(),\n  candidate_id: status.candidate_id,\n  total_jobs_evaluated: ranked.length + skipped.length,\n  apply_jobs_processed: 1,\n  application_id: status.application_id,\n  application_status: status.application_status,\n  approval_decision: status.approval_decision,\n  job_id: status.job_id,\n  company: status.company,\n  job_title: status.job_title,\n  match_score: data.target_job ? data.target_job.match_score : null,\n  error: status.error || null,\n  contracts_validated: ['3.1 candidate_profile', '3.2 jobs', '3.3 ranked_jobs', '3.4 application_package', '3.5 application_status']\n};\n\nconsole.log('[M6 Final] Pipeline execution complete.', JSON.stringify(summary, null, 2));\n\nreturn [{ json: { success: true, summary, application_status: status } }];"
+        "jsCode": "// Final pipeline summary per item\nconst items = $input.all();\nreturn items.map(item => {\n  const data = item.json;\n  const status = data.application_status;\n  const ranked = data.ranked_jobs || [];\n  const skipped = data.skipped_jobs || [];\n\n  const summary = {\n    pipeline: 'Complete Job Hunter - E2E',\n    completed_at: new Date().toISOString(),\n    candidate_id: status.candidate_id,\n    total_jobs_evaluated: ranked.length + skipped.length,\n    apply_jobs_processed: 1,\n    application_id: status.application_id,\n    application_status: status.application_status,\n    approval_decision: status.approval_decision,\n    job_id: status.job_id,\n    company: status.company,\n    job_title: status.job_title,\n    match_score: data.target_job ? data.target_job.match_score : null,\n    error: status.error || null,\n    contracts_validated: ['3.1 candidate_profile', '3.2 jobs', '3.3 ranked_jobs', '3.4 application_package', '3.5 application_status']\n  };\n\n  return {\n    json: {\n      success: true,\n      summary,\n      application_status: status\n    }\n  };\n});"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2200, 300],
+      "position": [
+        2200,
+        300
+      ],
       "id": "pipeline-summary",
       "name": "11 - Final Pipeline Summary & Contract 3.5 Persistence"
     },
     {
       "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ JSON.stringify($json) }}"
+        "respondWith": "allIncomingItems",
+        "options": {}
       },
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
-      "position": [2400, 300],
+      "position": [
+        2400,
+        300
+      ],
       "id": "webhook-response",
       "name": "12 - Respond to Webhook"
     }
   ],
   "connections": {
-    "01 - Webhook Trigger (Pipeline Start)": {
-      "main": [[{ "node": "02 - Validate Contract Inputs (3.1 + 3.2)", "type": "main", "index": 0 }]]
-    },
     "02 - Validate Contract Inputs (3.1 + 3.2)": {
-      "main": [[{ "node": "03 - M3: Matching & Ranking (Contract 3.3)", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "03 - M3: Matching & Ranking (Contract 3.3)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "03 - M3: Matching & Ranking (Contract 3.3)": {
-      "main": [[{ "node": "04 - APPLY Filter (decision == APPLY only)", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "04 - APPLY Filter (decision == APPLY only)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "04 - APPLY Filter (decision == APPLY only)": {
-      "main": [[{ "node": "05 - M4: CV Tailoring & Documents (Contract 3.4)", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "05 - M4: CV Tailoring & Documents (Contract 3.4)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "05 - M4: CV Tailoring & Documents (Contract 3.4)": {
-      "main": [[{ "node": "06 - M4: Compile Documents (PDF via Express)", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "06 - M4: Compile Documents (PDF via Express)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "06 - M4: Compile Documents (PDF via Express)": {
-      "main": [[{ "node": "07 - Merge Compiled Package (M4 → M5 Boundary)", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "07 - Merge Compiled Package (M4 → M5 Boundary)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "07 - Merge Compiled Package (M4 → M5 Boundary)": {
-      "main": [[{ "node": "08 - M5: Validate Contract 3.4 & Prepare Submission", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "08 - M5: Validate Contract 3.4 & Prepare Submission",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "08 - M5: Validate Contract 3.4 & Prepare Submission": {
-      "main": [[{ "node": "09 - M5: Submit to Application Tracking (Express)", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "09 - M5: Submit to Application Tracking (Express)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "09 - M5: Submit to Application Tracking (Express)": {
-      "main": [[{ "node": "10 - M5: Build Contract 3.5 (application_status)", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "10 - M5: Build Contract 3.5 (application_status)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "10 - M5: Build Contract 3.5 (application_status)": {
-      "main": [[{ "node": "11 - Final Pipeline Summary & Contract 3.5 Persistence", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "11 - Final Pipeline Summary & Contract 3.5 Persistence",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "11 - Final Pipeline Summary & Contract 3.5 Persistence": {
-      "main": [[{ "node": "12 - Respond to Webhook", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "12 - Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "job-hunter-pipeline-trigger": {
+      "main": [
+        [
+          {
+            "node": "02 - Validate Contract Inputs (3.1 + 3.2)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "active": false,
@@ -222,6 +348,12 @@
   "id": "e2e-orchestration-workflow",
   "meta": {
     "description": "Complete end-to-end Job Hunter Agent orchestration workflow. Validates Contract 3.1 (candidate_profile) + 3.2 (jobs), runs M3 ranking, filters APPLY jobs, runs M4 tailoring, passes Contract 3.4 to M5 tracking, and returns Contract 3.5 (application_status). Each APPLY job is processed independently.",
-    "contracts_enforced": ["3.1", "3.2", "3.3", "3.4", "3.5"]
+    "contracts_enforced": [
+      "3.1",
+      "3.2",
+      "3.3",
+      "3.4",
+      "3.5"
+    ]
   }
 }

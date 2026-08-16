@@ -236,34 +236,70 @@
           <p>Retrieve search queries across multiple independent sources and clean the dataset</p>
         </header>
 
+        <!-- CANDIDATE SELECTION & PROFILE CONTEXT -->
+        <div class="panel" style="background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(168, 85, 247, 0.15)); border: 1px solid rgba(168, 85, 247, 0.35); margin-bottom: 20px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
+            <div style="flex: 1; min-width: 260px;">
+              <span style="font-size: 0.85rem; color: #a5b4fc; text-transform: uppercase; letter-spacing: 1px; font-weight: 600;">👤 Selected Candidate Profile:</span>
+              <div style="margin-top: 6px;">
+                <select id="candidate-profile-selector" onchange="onCandidateProfileSelected(this.value)" class="form-control" style="background: #0f172a; color: #38bdf8; font-weight: 600; font-size: 1rem; padding: 10px; border-radius: 8px; border: 1px solid #6366f1; width: 100%; max-width: 380px;">
+                  <option value="">-- Choose Candidate CV --</option>
+                </select>
+              </div>
+            </div>
+            
+            <div style="flex: 2; min-width: 300px;" id="candidate-active-card-details">
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <h3 style="margin: 0; color: #fff;" id="job-discovery-cand-name">Ahmed Abdo</h3>
+                <span class="badge blue" id="job-discovery-cand-role">Computer Science</span>
+              </div>
+              <p style="margin: 6px 0 0 0; color: #cbd5e1; font-size: 0.9rem;" id="job-discovery-cand-skills-text">Skills: Python, Java, Node.js, Express, MongoDB, Docker</p>
+              <p style="margin: 3px 0 0 0; color: #94a3b8; font-size: 0.85rem;" id="job-discovery-cand-edu-text">Alamein International University (2022 — 2026)</p>
+            </div>
+          </div>
+        </div>
+
         <div class="panel">
           <h2>1. Search Configuration & Feeds</h2>
           <div class="form-row">
-            <div class="form-group">
-              <label>Search terms (Keywords):</label>
-              <input type="text" id="job-search-terms" value="Backend Engineer, Node.js Developer">
+            <div class="form-group" style="flex: 2;">
+              <label>Search terms (Auto-filled from CV):</label>
+              <input type="text" id="job-search-terms" value="Backend, Node.js, Python, Java">
             </div>
-            <div class="form-group">
-              <label>Location:</label>
-              <input type="text" id="job-search-location" value="New York, NY">
+            <div class="form-group" style="flex: 1.5;">
+              <label>Target Location / Region:</label>
+              <select id="job-search-location-select" onchange="onLocationOptionChanged(this.value)" class="form-control" style="background: #1e293b; color: #fff; padding: 8px; border-radius: 6px; border: 1px solid #334155;">
+                <option value="Worldwide / Remote" selected>🌐 Remote / Worldwide</option>
+                <option value="Egypt">🇪🇬 Egypt (Cairo, Alex & Remote)</option>
+                <option value="UAE & Saudi Arabia">🇦🇪 / 🇸🇦 Gulf & MENA Region</option>
+                <option value="Europe & UK">🇪🇺 Europe & UK</option>
+                <option value="USA & Canada">🇺🇸 USA & Canada</option>
+                <option value="custom">✏️ Other (Custom City/Country)...</option>
+              </select>
+              <input type="text" id="job-search-location" value="Worldwide / Remote" style="display: none; margin-top: 6px;" placeholder="Enter custom location">
             </div>
-            <div class="form-group">
-              <label>Limit per source:</label>
-              <input type="number" id="job-search-limit" value="10">
+            <div class="form-group" style="flex: 1.5;">
+              <label>Feed Source Mode:</label>
+              <select id="job-search-mode" class="form-control" style="background: #1e293b; color: #fff; padding: 8px; border-radius: 6px; border: 1px solid #334155;">
+                <option value="live" selected>🌐 Live Public APIs (Remotive & Jobicy)</option>
+                <option value="mock">📁 Offline Simulation (Sources A & B)</option>
+              </select>
             </div>
-            <div class="form-group align-end">
-              <button class="btn btn-primary" onclick="triggerJobDiscovery()">Run Job Search</button>
+            <div class="form-group align-end" style="flex: 1;">
+              <button class="btn btn-primary large" onclick="triggerJobDiscovery()" style="width: 100%; white-space: nowrap;">
+                🔍 Run Live Search
+              </button>
             </div>
           </div>
           
           <div class="source-metrics margin-top">
             <div class="source-card">
-              <h4>Source A (GlobalJobs API)</h4>
+              <h4 id="feed-a-title">Feed 1: LinkedIn & Indeed (JSearch Live)</h4>
               <p id="source-a-status">Status: Idle</p>
               <span class="count" id="source-a-count">0</span>
             </div>
             <div class="source-card">
-              <h4>Source B (TechCareers API)</h4>
+              <h4 id="feed-b-title">Feed 2: Remotive Public Feed</h4>
               <p id="source-b-status">Status: Idle</p>
               <span class="count" id="source-b-count">0</span>
             </div>
@@ -312,6 +348,9 @@
                 <option value="keyword">Keyword Overlap</option>
                 <option value="semantic">Semantic Similarity</option>
               </select>
+            </div>
+            <div class="form-group align-end">
+              <button class="btn btn-primary" onclick="recalculateMatchScores()">Recalculate Match Scores</button>
             </div>
           </div>
         </div>

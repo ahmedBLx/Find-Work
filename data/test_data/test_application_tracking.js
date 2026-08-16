@@ -66,22 +66,23 @@ async function runRegressionTests() {
   console.log('\nTest 1: Submit New Application registers pending_approval');
   const res1 = await postRequest('/api/applications/submit', payload);
   console.log('Status Code:', res1.statusCode);
-  console.log('Response Success:', res1.data.success);
-  console.log('App Status:', res1.data.application.application_status);
-  let pass = res1.statusCode === 200 && res1.data.success && res1.data.application.application_status === 'pending_approval';
+  console.log('Response Payload:', JSON.stringify(res1.data, null, 2));
+  let pass = res1.statusCode === 200 && res1.data.success && res1.data.application && res1.data.application.application_status === 'pending_approval';
   if (!pass) allPassed = false;
   console.log(`RESULT: ${pass ? 'PASS' : 'FAIL'}`);
 
-  const appId = res1.data.application.application_id;
+
+  const appId = res1.data.application ? res1.data.application.application_id : null;
 
   // Test 2: Double submission check blocks duplicate
   console.log('\nTest 2: Double submission triggers Duplicate prevention');
   const res2 = await postRequest('/api/applications/submit', payload);
   console.log('Status Code:', res2.statusCode);
-  console.log('Response Message:', res2.data.message);
-  pass = res2.statusCode === 400 && res2.data.success === false && res2.data.message.includes('UNIQUE constraint');
+  console.log('Response Payload:', JSON.stringify(res2.data, null, 2));
+  pass = res2.statusCode === 400 && res2.data && res2.data.success === false && res2.data.message.includes('UNIQUE constraint');
   if (!pass) allPassed = false;
   console.log(`RESULT: ${pass ? 'PASS' : 'FAIL'}`);
+
 
   // Test 3: Human decision APPROVED transitions to submitted
   console.log('\nTest 3: Human Approved Decision transition');
